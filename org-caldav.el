@@ -1348,12 +1348,7 @@ Returns nil if there are no more events."
       (progn
 	;; No more events.
 	(widen)	nil)
-    (beginning-of-line)
-    (narrow-to-region (point)
-		      (save-excursion
-			(search-forward "END:VEVENT")
-			(forward-line 1)
-			(point)))
+    (org-caldav-narrow-event-under-point)
     t))
 
 (defun org-caldav-narrow-event-under-point ()
