@@ -902,6 +902,28 @@ Should I try to resume? "))))
     (org-caldav-display-sync-results))
   (message "Finished sync."))
 
+(defun org-caldav-cleanup-event-ics (event)
+  (widen)
+  (goto-char (point-min))
+  (unless (re-search-forward (format "^UID:\\s-*%s\\s-*$" (car event)) nil t)
+    (error "Could not find UID %s" (car event)))
+  (org-caldav-narrow-event-under-point)
+  (org-caldav-cleanup-ics-description)
+  (org-caldav-maybe-fix-timezone))
+
+(ert-deftest org-caldav-test-cleanup-event-ics ()
+  (with-temp-buffer
+    (insert "Some intro tex
+BEGIN:VEVENT
+UID:123456789
+DESCRIPTION:<2020-06-16 Tue 19:00>–<2020-06-16 Tue 20:00> HUUUU HUUUUU
+END:VEVENT
+END:VCALENDAR
+Some closing text")
+    (org-caldav-cleanup-event-ics '("123456789" nil nil nil nil))
+    (should (string= (buffer-string)
+                     "BEGIN:VEVENT\nUID:123456789\nDESCRIPTION: HUUUU HUUUUU\nEND:VEVENT\n"))))
+
 (defun org-caldav-update-events-in-cal (icsbuf)
   "Update events in calendar.
 ICSBUF is the buffer containing the exported iCalendar file."
@@ -923,13 +945,7 @@ ICSBUF is the buffer containing the exported iCalendar file."
 	     (format "Event UID %s: Was already put previously." (car cur)))
 	  (org-caldav-debug-print 1
 	   (format "Event UID %s: Org --> Cal" (car cur)))
-	  (widen)
-	  (goto-char (point-min))
-	  (unless (re-search-forward (format "^UID:\\s-*%s\\s-*$" (car cur)) nil t)
-	    (error "Could not find UID %s" (car cur)))
-	  (org-caldav-narrow-event-under-point)
-	  (org-caldav-cleanup-ics-description)
-	  (org-caldav-maybe-fix-timezone)
+          (org-caldav-cleanup-event-ics cur)
 	  (org-caldav-set-sequence-number cur event-etag)
 	  (message "Putting event %d of %d" counter (length events))
 	  (if (org-caldav-put-event icsbuf (car cur))
