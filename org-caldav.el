@@ -1078,6 +1078,54 @@ returned as a cons (POINT . LEVEL)."
 	     (org-end-of-subtree t t)
 	     (cons (point) level))))))
 
+(defun org-caldav-get-event-data (event)
+  (with-current-buffer (org-caldav-get-event (car event))
+    ;; Get sequence number
+    (goto-char (point-min))
+    (save-excursion
+      (when (re-search-forward "^BEGIN:VTODO$" nil t)
+        (message "Skipping TODO entry.")
+        (org-caldav-event-set-status event 'ignored)
+        (throw 'next nil)))
+    (save-excursion
+      (when (re-search-forward "^SEQUENCE:\\s-*\\([0-9]+\\)" nil t)
+        (org-caldav-event-set-sequence
+         event (string-to-number (match-string 1)))))
+    (org-caldav-convert-event)))
+
+(defun org-caldav-update-org-node (event eventdata)
+  (let* ((uid (car event))
+         (marker (org-id-find uid t))
+         timesync)
+    (when (null marker)
+      (error "Could not find UID %s" uid))
+    (with-current-buffer (marker-buffer marker)
+      (goto-char (marker-position marker))
+      (when org-caldav-backup-file (org-caldav-backup-item))
+      ;; See what we should sync.
+      (when (or (eq org-caldav-sync-changes-to-org 'title-only)
+                (eq org-caldav-sync-changes-to-org 'title-and-timestamp))
+        ;; Sync title
+        (org-caldav-change-heading (nth 4 eventdata))
+        ;; and location
+        (org-caldav-change-location (nth 6 eventdata)))
+      (when (or (eq org-caldav-sync-changes-to-org 'timestamp-only)
+                (eq org-caldav-sync-changes-to-org 'title-and-timestamp))
+        ;; Sync timestamp
+        (setq timesync (org-caldav-change-timestamp
+                        (apply 'org-caldav-create-time-range
+                               (append (seq-take eventdata 4) (list (nth 7 eventdata)))))))
+      (when (eq org-caldav-sync-changes-to-org 'all)
+        ;; Sync everything, so first remove the old one.
+        (let ((level (org-current-level)))
+          (delete-region (org-entry-beginning-position)
+                         (org-entry-end-position))
+          (apply 'org-caldav-insert-org-entry (append eventdata (list uid level)))))
+      (push (list org-caldav-calendar-id uid (org-caldav-event-status event)
+                  (if (eq timesync 'orgsexp) 'error:changed-orgsexp 'cal->org))
+            org-caldav-sync-result)
+      (current-buffer))))
+
 (defun org-caldav-update-events-in-org ()
   "Update events in Org files."
   (org-caldav-debug-print 1 "=== Updating events in Org")
@@ -1092,19 +1140,7 @@ returned as a cons (POINT . LEVEL)."
 	(setq uid (car cur))
 	(setq counter (1+ counter))
 	(message "Getting event %d of %d" counter (length events))
-	(with-current-buffer (org-caldav-get-event uid)
-	  ;; Get sequence number
-	  (goto-char (point-min))
-	  (save-excursion
-	    (when (re-search-forward "^BEGIN:VTODO$" nil t)
-	      (message "Skipping TODO entry.")
-	      (org-caldav-event-set-status cur 'ignored)
-	      (throw 'next nil)))
-	  (save-excursion
-	    (when (re-search-forward "^SEQUENCE:\\s-*\\([0-9]+\\)" nil t)
-	      (org-caldav-event-set-sequence
-	       cur (string-to-number (match-string 1)))))
-	  (setq eventdata (org-caldav-convert-event)))
+        (setq eventdata (org-caldav-get-event-data cur))
 	(cond
 	 ((eq (org-caldav-event-status cur) 'new-in-cal)
 	  ;; This is a new event.
@@ -1142,39 +1178,7 @@ which can only be synced to calendar. Ignoring." uid))
 	  ;; This is a changed event.
 	  (org-caldav-debug-print
 	   1 (format "Event UID %s: Changed in Cal --> Org" uid))
-	  (let ((marker (org-id-find (car cur) t)))
-	    (when (null marker)
-	      (error "Could not find UID %s." (car cur)))
-	    (with-current-buffer (marker-buffer marker)
-	      (goto-char (marker-position marker))
-	      (when org-caldav-backup-file
-		(org-caldav-backup-item))
-	      ;; See what we should sync.
-	      (when (or (eq org-caldav-sync-changes-to-org 'title-only)
-			(eq org-caldav-sync-changes-to-org 'title-and-timestamp))
-		;; Sync title
-		(org-caldav-change-heading (nth 4 eventdata))
-		;; and location
-		(org-caldav-change-location (nth 6 eventdata)))
-	      (when (or (eq org-caldav-sync-changes-to-org 'timestamp-only)
-			(eq org-caldav-sync-changes-to-org 'title-and-timestamp))
-		;; Sync timestamp
-		(setq timesync
-		      (org-caldav-change-timestamp
-		       (apply 'org-caldav-create-time-range (append (seq-take eventdata 4) (list (nth 7 eventdata)))))))
-	      (when (eq org-caldav-sync-changes-to-org 'all)
-		;; Sync everything, so first remove the old one.
-		(let ((level (org-current-level)))
-		  (delete-region (org-entry-beginning-position)
-				 (org-entry-end-position))
-		  (apply 'org-caldav-insert-org-entry
-			 (append eventdata (list uid level)))))
-	      (setq buf (current-buffer))
-	      (push (list org-caldav-calendar-id uid
-			  (org-caldav-event-status cur)
-			  (if (eq timesync 'orgsexp)
-			      'error:changed-orgsexp 'cal->org))
-		    org-caldav-sync-result)))))
+          (setq buf (org-caldav-update-org-node cur eventdata))))
 	;; Update the event database.
 	(org-caldav-event-set-status cur 'synced)
 	(with-current-buffer buf
@@ -1182,7 +1186,10 @@ which can only be synced to calendar. Ignoring." uid))
 	   cur (md5 (buffer-substring-no-properties
 		     (org-entry-beginning-position)
 		     (org-entry-end-position))))))))
-  ;; (Maybe) delete entries which were deleted in calendar.
+  (org-caldav-delete-maybe-org-entries))
+
+(defun org-caldav-delete-maybe-org-entries ()
+  "Delete entries which were deleted in calendar."
   (unless (eq org-caldav-delete-org-entries 'never)
     (dolist (cur (org-caldav-filter-events 'deleted-in-cal))
       (org-id-goto (car cur))
@@ -1193,8 +1200,7 @@ which can only be synced to calendar. Ignoring." uid))
 		       (org-entry-end-position))
 	(setq org-caldav-event-list
 	      (delete cur org-caldav-event-list))
-	(org-caldav-debug-print 1
-	 (format "Event UID %s: Deleted from Org" (car cur)))
+	(org-caldav-debug-print 1 (format "Event UID %s: Deleted from Org" (car cur)))
 	(push (list org-caldav-calendar-id (car cur)
 		    'deleted-in-cal 'removed-from-org)
 	      org-caldav-sync-result)))))
