@@ -593,22 +593,18 @@ If retrieve fails, do `org-caldav-retry-attempts' retries."
 			      (buffer-string)))
     eventbuffer))
 
-(defun org-caldav-put-event (buffer)
+(defun org-caldav-put-event (buffer uid)
   "Add event in BUFFER to calendar.
 The filename will be derived from the UID."
   (let ((event (with-current-buffer buffer (buffer-string))))
     (with-temp-buffer
       (insert org-caldav-calendar-preamble event "END:VCALENDAR\n")
       (goto-char (point-min))
-      (let* ((uid (org-caldav-get-uid))
-	     (url (concat (org-caldav-events-url) (url-hexify-string uid) org-caldav-uuid-extension)))
-	(org-caldav-debug-print 1 (format "Putting event UID %s." uid))
-	(org-caldav-debug-print 2 (format "Content of event UID %s: " uid)
-				(buffer-string))
-	(setq org-caldav-empty-calendar nil)
-	(org-caldav-save-resource
-	 (concat (org-caldav-events-url) uid org-caldav-uuid-extension)
-	 (encode-coding-string (buffer-string) 'utf-8))))))
+      (org-caldav-debug-print 1 (format "Putting event UID %s." uid))
+      (org-caldav-debug-print 2 (format "Content of event UID %s: " uid) (buffer-string))
+      (setq org-caldav-empty-calendar nil)
+      (org-caldav-save-resource (concat (org-caldav-events-url) uid org-caldav-uuid-extension)
+                                (encode-coding-string (buffer-string) 'utf-8)))))
 
 (defun org-caldav-url-dav-delete-file (url)
   "Delete URL.
@@ -863,7 +859,7 @@ If RESUME is non-nil, try to resume."
 	;; Update events for the org->cal direction
 	(when (org-caldav-sync-do-org->cal)
 	  ;; Export Org to icalendar format
-	  (setq org-caldav-ics-buffer (org-caldav-generate-ics))
+	  (setq org-caldav-ics-buffer (org-caldav-generate-ics (org-caldav-get-org-files-for-sync)))
 	  (org-caldav-update-eventdb-from-org org-caldav-ics-buffer))
 	;; Update events for the cal->org direction
 	(when (org-caldav-sync-do-cal->org)
@@ -921,7 +917,7 @@ ICSBUF is the buffer containing the exported iCalendar file."
 	  uid)
       ;; Put the events via CalDAV.
       (dolist (cur events)
-	(setq counter (1+ counter))
+        (cl-incf counter)
 	(if (eq (org-caldav-event-etag cur) 'put)
 	    (org-caldav-debug-print 1
 	     (format "Event UID %s: Was already put previously." (car cur)))
@@ -929,16 +925,14 @@ ICSBUF is the buffer containing the exported iCalendar file."
 	   (format "Event UID %s: Org --> Cal" (car cur)))
 	  (widen)
 	  (goto-char (point-min))
-	  (while (and (setq uid (org-caldav-get-uid))
-		      (not (string-match (car cur) uid))))
-	  (unless (string-match (car cur) uid)
+	  (unless (re-search-forward (format "^UID:\\s-*%s\\s-*$" (car cur)) nil t)
 	    (error "Could not find UID %s" (car cur)))
 	  (org-caldav-narrow-event-under-point)
 	  (org-caldav-cleanup-ics-description)
 	  (org-caldav-maybe-fix-timezone)
 	  (org-caldav-set-sequence-number cur event-etag)
 	  (message "Putting event %d of %d" counter (length events))
-	  (if (org-caldav-put-event icsbuf)
+	  (if (org-caldav-put-event icsbuf (car cur))
 	      (org-caldav-event-set-etag cur 'put)
 	    (org-caldav-debug-print 1
 	     (format "Event UID %s: Error while doing Org --> Cal" (car cur)))
@@ -1278,14 +1272,13 @@ match org-caldav-skip-conditions."
       (message "ID properties created in file \"%s\"" file)
       (sit-for 2))))
 
-(defun org-caldav-generate-ics ()
+(defun org-caldav-generate-ics (orgfiles)
   "Generate ICS file from `org-caldav-files'.
 Returns buffer containing the ICS file."
   (let ((icalendar-file
 	 (if (featurep 'ox-icalendar)
 	     'org-icalendar-combined-agenda-file
 	   'org-combined-agenda-icalendar-file))
-	(orgfiles (org-caldav-get-org-files-for-sync))
 	(org-export-select-tags org-caldav-select-tags)
 	(org-icalendar-exclude-tags org-caldav-exclude-tags)
         ;; We create UIDs ourselves and do not rely on ox-icalendar.el
@@ -1431,8 +1424,7 @@ Returns MD5 from entry."
   (with-temp-buffer
     (cond
      ((string= "S" e-type) (insert "SCHEDULED: "))
-     ((string= "DL" e-type) (insert "DEADLINE: "))
-     )
+     ((string= "DL" e-type) (insert "DEADLINE: ")))
     (org-caldav-insert-org-time-stamp start-d start-t)
     (if (and end-d
 	     (not (equal end-d start-d)))
