@@ -1222,10 +1222,9 @@ NEWLOCATION contains newlines, replace them with
 `org-caldav-location-newline-replacement'."
   (let ((replacement org-caldav-location-newline-replacement))
     (cl-assert (not (string-match-p "\n" replacement)))
-    (if (> (length newlocation) 0)
-	(org-set-property "LOCATION"
-			  (replace-regexp-in-string "\n" replacement newlocation))
-      (org-delete-property "LOCATION"))))
+    (if (string= newlocation "")
+        (org-delete-property "LOCATION")
+      (org-set-property "LOCATION" (replace-regexp-in-string "\n" replacement newlocation)))))
 
 (defun org-caldav-change-timestamp (newtime)
   "Change timestamp from Org item under point to NEWTIME.
@@ -1577,16 +1576,7 @@ If COMPLEMENT is non-nil, return all item without errors."
   (let ((marker (org-id-find uid t)))
     (if (null marker)
 	"(Could not find UID)"
-      (with-current-buffer (marker-buffer marker)
-	(goto-char (marker-position marker))
-	(org-narrow-to-subtree)
-	(goto-char (point-min))
-	(org-show-subtree)
-	(prog1
-	    (if (re-search-forward org-complex-heading-regexp nil t)
-		(match-string 4)
-	      "(Could not find heading)")
-	  (widen))))))
+      (org-entry-get marker "ITEM"))))
 
 (defun org-caldav-goto-uid ()
   "Jump to UID under point."
@@ -1644,10 +1634,10 @@ which can be fed into `org-caldav-insert-org-entry'."
 	 end-d
 	 end-1-d
 	 end-t
+         e-type
 	 (summary (icalendar--convert-string-for-import
 		   (or (icalendar--get-event-property e 'SUMMARY)
 		       "No Title")))
-     e-type
 	 (description (icalendar--convert-string-for-import
 		       (or (icalendar--get-event-property e 'DESCRIPTION)
 			   "")))
