@@ -304,13 +304,6 @@ and  action = {org->cal, cal->org, error:org->cal, error:cal->org}.")
 (defvar org-caldav-previous-files nil
   "Files that were synced during previous run.")
 
-
-(defsubst org-caldav-add-event (uid md5 etag sequence status)
-  "Add event with UID, MD5, ETAG and STATUS."
-  (setq org-caldav-event-list
-	(append org-caldav-event-list
-		(list (list uid md5 etag sequence status)))))
-
 (defsubst org-caldav-search-event (uid)
   "Return entry with UID from even list."
   (assoc uid org-caldav-event-list))
@@ -674,85 +667,74 @@ Are you really sure? ")))
     (goto-char (point-min))
     (while (org-caldav-narrow-next-event)
       (let* ((uid (org-caldav-rewrite-uid-in-event))
-	     (md5 (unless (string-match "^orgsexp-" uid)
-		    (org-caldav-generate-md5-for-org-entry uid)))
-	     (event (org-caldav-search-event uid)))
-	(cond
-	 ((null event)
-	  ;; Event does not yet exist in DB, so add it.
-	  (org-caldav-debug-print 1
-	   (format "Org UID %s: New" uid))
-	  (org-caldav-add-event uid md5 nil nil 'new-in-org))
-	 ((not (string= md5 (org-caldav-event-md5 event)))
-	  ;; Event exists but has changed MD5, so mark it as changed.
-	  (org-caldav-debug-print 1
-	   (format "Org UID %s: Changed" uid))
-	  (org-caldav-event-set-md5 event md5)
-	  (org-caldav-event-set-status event 'changed-in-org))
-	 ((eq (org-caldav-event-status event) 'new-in-org)
-	  (org-caldav-debug-print 1
-	   (format "Org UID %s: Error. Double entry." uid))
-	  (push (list org-caldav-calendar-id
-		      uid 'new-in-org 'error:double-entry)
-		org-caldav-sync-result))
-	 (t
-	  (org-caldav-debug-print 1
-	   (format "Org UID %s: Synced" uid))
-	  (org-caldav-event-set-status event 'in-org)))))
+             (md5 (unless (string-match "^orgsexp-" uid)
+                    (org-caldav-generate-md5-for-org-entry uid)))
+             (event (org-caldav-search-event uid)))
+        (cond ((null event)
+               ;; Event does not yet exist in DB, so add it.
+               (org-caldav-debug-print 1 (format "Org UID %s: New" uid))
+               (push '(uid md5 etag sequence status) org-caldav-event-list))
+              ((not (string= md5 (org-caldav-event-md5 event)))
+               ;; Event exists but has changed MD5, so mark it as changed.
+               (org-caldav-debug-print 1 (format "Org UID %s: Changed" uid))
+               (org-caldav-event-set-md5 event md5)
+               (org-caldav-event-set-status event 'changed-in-org))
+              ((eq (org-caldav-event-status event) 'new-in-org)
+               (org-caldav-debug-print 1 (format "Org UID %s: Error. Double entry." uid))
+               (push (list org-caldav-calendar-id uid 'new-in-org 'error:double-entry)
+                     org-caldav-sync-result))
+              (t (org-caldav-debug-print 1 (format "Org UID %s: Synced" uid))
+                 (org-caldav-event-set-status event 'in-org)))))
     ;; Mark events deleted in Org
     (dolist (cur (org-caldav-filter-events nil))
       (org-caldav-debug-print
        1 (format "Cal UID %s: Deleted in Org" (car cur)))
       (org-caldav-event-set-status cur 'deleted-in-org))))
 
-(defun org-caldav-update-eventdb-from-cal ()
+(defun org-caldav-update-eventdb-from-cal (events)
   "Update event database from calendar."
   (org-caldav-debug-print 1 "=== Updating EventDB from Cal")
-  (let ((events (org-caldav-get-event-etag-list))
-	dbentry)
-    (dolist (cur events)
-      ;; Search entry in database.
-      (setq dbentry (org-caldav-search-event (car cur)))
-      (cond
-       ((not dbentry)
-	;; Event is not yet in database, so add it.
-	(org-caldav-debug-print 1
-	 (format "Cal UID %s: New" (car cur)))
-	(org-caldav-add-event (car cur) nil (cdr cur) nil 'new-in-cal))
-       ((eq (org-caldav-event-status dbentry) 'ignored)
-	(org-caldav-debug-print 1 (format "Cal UID %s: Ignored." (car cur))))
-       ((or (eq (org-caldav-event-status dbentry) 'changed-in-org)
-	    (eq (org-caldav-event-status dbentry) 'deleted-in-org))
-	(org-caldav-debug-print 1
-	 (format "Cal UID %s: Ignoring (Org always wins)." (car cur))))
-       ((null (org-caldav-event-etag dbentry))
-	(org-caldav-debug-print 1
-	 (format "Cal UID %s: No Etag. Mark as change, so putting it again." (car cur)))
-	(org-caldav-event-set-status dbentry 'changed-in-org))
-       ((not (string= (cdr cur) (org-caldav-event-etag dbentry)))
-	;; Event's etag changed.
-	(org-caldav-debug-print 1
-	 (format "Cal UID %s: Changed" (car cur)))
-	(org-caldav-event-set-status dbentry 'changed-in-cal)
-	(org-caldav-event-set-etag dbentry (cdr cur)))
-       ((null (org-caldav-event-status dbentry))
-	;; Event was deleted in Org
-	(org-caldav-debug-print 1
-	 (format "Cal UID %s: Deleted in Org" (car cur)))
-	(org-caldav-event-set-status dbentry 'deleted-in-org))
-       ((eq (org-caldav-event-status dbentry) 'in-org)
-	(org-caldav-debug-print 1
-	 (format "Cal UID %s: Synced" (car cur)))
-	(org-caldav-event-set-status dbentry 'synced))
-       ((eq (org-caldav-event-status dbentry) 'changed-in-org)
-	;; Do nothing
-	)
-       (t
-	(error "Unknown status; this is probably a bug."))))
+  (dolist (cur events)
+    ;; Search entry in database.
+    (let  ((dbentry (org-caldav-search-event (car cur))))
+      (cond ((not dbentry)
+             ;; Event is not yet in database, so add it.
+             (org-caldav-debug-print 1 (format "Cal UID %s: New" (car cur)))
+             (push '((car cur) nil (cdr cur) nil 'new-in-cal) org-caldav-event-list))
+            ((eq (org-caldav-event-status dbentry) 'ignored)
+             (org-caldav-debug-print 1 (format "Cal UID %s: Ignored." (car cur))))
+            ((or
+              (eq (org-caldav-event-status dbentry) 'changed-in-org)
+              (eq (org-caldav-event-status dbentry) 'deleted-in-org))
+             (org-caldav-debug-print 1 (format "Cal UID %s: Ignoring (Org always wins)." (car
+                                                                                          cur))))
+            ((null (org-caldav-event-etag dbentry))
+             (org-caldav-debug-print 1 (format
+                                        "Cal UID %s: No Etag. Mark as change, so putting it again."
+                                        (car cur)))
+             (org-caldav-event-set-status dbentry 'changed-in-org))
+            ((not (string= (cdr cur)
+                           (org-caldav-event-etag dbentry)))
+             ;; Event's etag changed.
+             (org-caldav-debug-print 1 (format "Cal UID %s: Changed" (car cur)))
+             (org-caldav-event-set-status dbentry 'changed-in-cal)
+             (org-caldav-event-set-etag dbentry (cdr cur)))
+            ((null (org-caldav-event-status dbentry))
+             ;; Event was deleted in Org
+             (org-caldav-debug-print 1 (format "Cal UID %s: Deleted in Org" (car cur)))
+             (org-caldav-event-set-status dbentry 'deleted-in-org))
+            ((eq (org-caldav-event-status dbentry) 'in-org)
+             (org-caldav-debug-print 1 (format "Cal UID %s: Synced" (car cur)))
+             (org-caldav-event-set-status dbentry 'synced))
+            ((eq (org-caldav-event-status dbentry) 'changed-in-org)
+             ;; Do nothing
+             )
+            (t
+             (error
+              "Unknown status; this is probably a bug."))))
     ;; Mark events deleted in cal.
     (dolist (cur (org-caldav-filter-events 'in-org))
-      (org-caldav-debug-print 1
-       (format "Cal UID %s: Deleted in Cal" (car cur)))
+      (org-caldav-debug-print 1 (format "Cal UID %s: Deleted in Cal" (car cur)))
       (org-caldav-event-set-status cur 'deleted-in-cal))))
 
 (defun org-caldav-generate-md5-for-org-entry (uid)
@@ -863,7 +845,7 @@ If RESUME is non-nil, try to resume."
 	  (org-caldav-update-eventdb-from-org org-caldav-ics-buffer))
 	;; Update events for the cal->org direction
 	(when (org-caldav-sync-do-cal->org)
-	  (org-caldav-update-eventdb-from-cal)))
+	  (org-caldav-update-eventdb-from-cal (org-caldav-get-event-etag-list))))
       (when (org-caldav-sync-do-org->cal)
 	(org-caldav-update-events-in-cal org-caldav-ics-buffer))
       (when  (org-caldav-sync-do-cal->org)
