@@ -463,7 +463,7 @@ OAuth2 if necessary."
 	(when (not (re-search-forward "^HTTP[^ ]* \\([0-9]+ .*\\)$"
 				      (point-at-eol) t))
 	  (switch-to-buffer buffer)
-	  (error "No valid HTTP response from URL %s." url))
+	  (error "No valid HTTP response from URL %s" url))
 	(let ((response (match-string 1)))
 	  (when (not (string-match "2[0-9][0-9].*" response))
 	    (switch-to-buffer resultbuf)
@@ -471,14 +471,13 @@ OAuth2 if necessary."
       (org-caldav-namespace-bug-workaround resultbuf)
       (url-dav-process-response resultbuf url))))
 
-(defun org-caldav-check-connection ()
+(defun org-caldav-check-connection (url)
   "Check connection by doing a PROPFIND on CalDAV URL.
 Also sets `org-caldav-empty-calendar' if calendar is empty."
   (org-caldav-debug-print 1 (format "Check connection for %s."
 				    (org-caldav-events-url)))
-  (org-caldav-check-dav (org-caldav-events-url))
-  (let* ((output (org-caldav-url-dav-get-properties
-		  (org-caldav-events-url) "resourcetype"))
+  (org-caldav-check-dav url)
+  (let* ((output (org-caldav-url-dav-get-properties url "resourcetype"))
 	 (status (plist-get (cdar output) 'DAV:status)))
     ;; We accept any 2xx status. Since some CalDAV servers return 404
     ;; for a newly created and not yet used calendar, we accept it as
@@ -486,7 +485,7 @@ Also sets `org-caldav-empty-calendar' if calendar is empty."
     (unless (or (= (/ status 100) 2)
 		(= status 404))
       (org-caldav-debug-print 1 "Got error status from PROPFIND: " output)
-      (error "Could not query CalDAV URL %s." (org-caldav-events-url)))
+      (error "Could not query CalDAV URL %s" url))
     (if (= status 404)
 	(progn
 	  (org-caldav-debug-print 1 "Got 404 status - assuming calendar is new and empty.")
@@ -815,11 +814,11 @@ If RESUME is non-nil, try to resume."
 	(while (null success)
 	  (condition-case err
 	      (progn
-		(org-caldav-check-connection)
+		(org-caldav-check-connection (org-caldav-events-url))
 		(setq success t))
 	    (error
 	     (if (= numretry (1- org-caldav-retry-attempts))
-		 (org-caldav-check-connection)
+		 (org-caldav-check-connection (org-caldav-events-url))
 	       (org-caldav-debug-print
 		1 "Got error while checking connection (will try again):" err)
 	       (cl-incf numretry))))))
