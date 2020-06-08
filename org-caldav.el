@@ -730,11 +730,11 @@ Are you really sure? ")))
              )
             (t
              (error
-              "Unknown status; this is probably a bug."))))
-    ;; Mark events deleted in cal.
-    (dolist (cur (org-caldav-filter-events 'in-org))
-      (org-caldav-debug-print 1 (format "Cal UID %s: Deleted in Cal" (car cur)))
-      (org-caldav-event-set-status cur 'deleted-in-cal))))
+              "Unknown status; this is probably a bug.")))))
+  ;; Mark events deleted in cal.
+  (dolist (cur (org-caldav-filter-events 'in-org))
+    (org-caldav-debug-print 1 (format "Cal UID %s: Deleted in Cal" (car cur)))
+    (org-caldav-event-set-status cur 'deleted-in-cal)))
 
 (defun org-caldav-generate-md5-for-org-entry (uid)
   "Find Org entry with UID and calculate its MD5."
