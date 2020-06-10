@@ -598,26 +598,17 @@ The filename will be derived from the UID."
       (org-caldav-save-resource (concat (org-caldav-events-url) uid org-caldav-uuid-extension)
                                 (encode-coding-string (buffer-string) 'utf-8)))))
 
-(defun org-caldav-url-dav-delete-file (url)
-  "Delete URL.
-Will switch to OAuth2 if necessary."
-  (org-caldav-url-retrieve-synchronously url "DELETE"))
-
 (defun org-caldav-delete-event (uid)
   "Delete event UID from calendar.
-Returns t on success and nil if an error occurs.  The error will
+Returns response buffer on success and nil if an error occurs.  The error will
 be caught and a message displayed instead."
   (org-caldav-debug-print 1 (format "Deleting event UID %s." uid))
   (condition-case err
-      (progn
-	(org-caldav-url-dav-delete-file
-	 (concat (org-caldav-events-url) uid org-caldav-uuid-extension))
-	t)
+      (org-caldav-url-retrieve-synchronously (concat (org-caldav-events-url) uid
+                                                     org-caldav-uuid-extension)"DELETE")
     (error
-     (progn
-       (message "Could not delete URI %s." uid)
-       (org-caldav-debug-print 1 "Got error while removing UID:" err)
-       nil))))
+     (progn (message "Could not delete URI %s." uid)
+            (org-caldav-debug-print 1 "Got error while removing UID:" err) nil))))
 
 (defun org-caldav-delete-everything (prefix)
   "Delete all events from Calendar and removes state file.
