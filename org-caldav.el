@@ -731,7 +731,7 @@ Are you really sure? ")))
   "Find Org entry with UID and calculate its MD5."
   (let ((marker (org-id-find uid t)))
     (when (null marker)
-      (error "Could not find UID %s." uid))
+      (error "Could not find UID %s" uid))
     (with-current-buffer (marker-buffer marker)
       (goto-char (marker-position marker))
       (md5 (buffer-substring-no-properties
@@ -1069,7 +1069,7 @@ returned as a cons (POINT . LEVEL)."
       (when (re-search-forward "^SEQUENCE:\\s-*\\([0-9]+\\)" nil t)
         (org-caldav-event-set-sequence
          event (string-to-number (match-string 1)))))
-    (org-caldav-convert-event)))
+    (car (org-caldav-convert-event))))
 
 (defun org-caldav-update-org-node (event eventdata)
   (let* ((uid (car event))
@@ -1130,7 +1130,7 @@ returned as a cons (POINT . LEVEL)."
 		   1 (format "Event UID %s: New in Cal --> Org inbox." uid))
 		  (goto-char (car point-and-level))
 		  (apply 'org-caldav-insert-org-entry
-			 (append eventdata (list uid (cdr point-and-level)))))
+			 (append eventdata (list (cdr point-and-level)))))
 		(push (list org-caldav-calendar-id uid
 			    (org-caldav-event-status cur) 'cal->org)
 		      org-caldav-sync-result)
@@ -1600,23 +1600,28 @@ which can be fed into `org-caldav-insert-org-entry'."
     (insert decoded))
   (goto-char (point-min))
   (let* ((calendar-date-style 'european)
-	 (ical-list (icalendar--read-element nil nil))
-	 (e (car (icalendar--all-events ical-list)))
-	 (zone-map (icalendar--convert-all-timezones ical-list))
-	 (dtstart (icalendar--get-event-property e 'DTSTART))
+         (ical-list (icalendar--read-element nil nil))
+         (zone-map (icalendar--convert-all-timezones ical-list))
+         events)
+    (dolist (event (icalendar--all-events ical-list) events)
+      (setq events (cons (org-caldav-create-org-entry event zone-map) events)))))
+
+(defun org-caldav-create-org-entry (event zone-map)
+(let* (
+	 (dtstart (icalendar--get-event-property event 'DTSTART))
 	 (dtstart-zone (icalendar--find-time-zone
 			(icalendar--get-event-property-attributes
-			 e 'DTSTART)
+			 event 'DTSTART)
 			zone-map))
 	 (dtstart-dec (icalendar--decode-isodatetime dtstart nil
 						     dtstart-zone))
 	 (start-d (icalendar--datetime-to-diary-date
 		   dtstart-dec))
 	 (start-t (if dtstart-dec (icalendar--datetime-to-colontime dtstart-dec) nil))
-	 (dtend (icalendar--get-event-property e 'DTEND))
+	 (dtend (icalendar--get-event-property event 'DTEND))
 	 (dtend-zone (icalendar--find-time-zone
 		      (icalendar--get-event-property-attributes
-		       e 'DTEND)
+		       event 'DTEND)
 		      zone-map))
 	 (dtend-dec (icalendar--decode-isodatetime dtend
 						   nil dtend-zone))
@@ -1627,17 +1632,18 @@ which can be fed into `org-caldav-insert-org-entry'."
 	 end-t
          e-type
 	 (summary (icalendar--convert-string-for-import
-		   (or (icalendar--get-event-property e 'SUMMARY)
+		   (or (icalendar--get-event-property event 'SUMMARY)
 		       "No Title")))
 	 (description (icalendar--convert-string-for-import
-		       (or (icalendar--get-event-property e 'DESCRIPTION)
+		       (or (icalendar--get-event-property event 'DESCRIPTION)
 			   "")))
 	 (location (icalendar--convert-string-for-import
-                    (or (icalendar--get-event-property e 'LOCATION)
+                    (or (icalendar--get-event-property event 'LOCATION)
                         "")))
-	 (rrule (icalendar--get-event-property e 'RRULE))
-	 (rdate (icalendar--get-event-property e 'RDATE))
-	 (duration (icalendar--get-event-property e 'DURATION)))
+	 (rrule (icalendar--get-event-property event 'RRULE))
+	 (uid (icalendar--get-event-property event 'UID))
+	 (rdate (icalendar--get-event-property event 'RDATE))
+	 (duration (icalendar--get-event-property event 'DURATION)))
     (if (string-match "^\\(?:\\(DL\\|S\\):\s+\\)?\\(.*\\)$" summary)
         (progn
           (setq e-type (match-string 1 summary))
@@ -1646,7 +1652,7 @@ which can be fed into `org-caldav-insert-org-entry'."
     (if	(and dtstart
 	     (string=
 	      (cadr (icalendar--get-event-property-attributes
-		     e 'DTSTART))
+		     event 'DTSTART))
 	      "DATE"))
 	(setq start-t nil))
     (when duration
@@ -1673,14 +1679,15 @@ which can be fed into `org-caldav-insert-org-entry'."
 		     (not (string=
 			   (cadr
 			    (icalendar--get-event-property-attributes
-			     e 'DTEND))
+			     event 'DTEND))
 			   "DATE")))
 		    (icalendar--datetime-to-colontime dtend-dec)
 		  start-t))
     ;; Return result
     (list start-d start-t
 	  (if end-t end-d end-1-d)
-	  end-t summary description location e-type)))
+	  end-t summary description location e-type uid)))
+
 
 ;; This is adapted from url-dav.el, written by Bill Perry.
 ;; This does more error checking on the headers and retries
@@ -1715,32 +1722,32 @@ This witches to OAuth2 if necessary."
     (< counter org-caldav-retry-attempts)))
 
 ;;;###autoload
-(defun org-caldav-import-ics-buffer-to-org ()
-  "Add ics content in current buffer to `org-caldav-inbox'."
-  (let ((event (org-caldav-convert-event))
-        (file (org-caldav-inbox-file org-caldav-inbox)))
+(defun org-caldav-import-ics-buffer-to-org (file)
+  "Add ics content in current buffer to FILE"
+  (let ((events (org-caldav-convert-event)))
     (with-current-buffer (find-file-noselect file)
-      (let* ((point-and-level (org-caldav-inbox-point-and-level org-caldav-inbox))
+      (let* ((point-and-level (org-caldav-inbox-point-and-level file))
              (point (car point-and-level))
              (level (cdr point-and-level)))
         (goto-char point)
-        (apply #'org-caldav-insert-org-entry
-               (append event (list nil level)))
-        (message "%s: Added event: %s"
-                 file
-                 (buffer-substring
-                  point
-                  (save-excursion
-                    (goto-char point)
-                    (point-at-eol 2))))))))
+        (dolist (event events)
+          (apply #'org-caldav-insert-org-entry
+                 (append event (list level)))
+          (message "%s: Added event: %s"
+                   file
+                   (buffer-substring
+                    point
+                    (save-excursion
+                      (goto-char point)
+                      (point-at-eol 2)))))))))
 
 ;;;###autoload
-(defun org-caldav-import-ics-to-org (path)
+(defun org-caldav-import-ics-to-org (path &optional file)
   "Add ics content in PATH to `org-caldav-inbox'."
   (with-current-buffer (get-buffer-create "*import-ics-to-org*")
     (delete-region (point-min) (point-max))
     (insert-file-contents path)
-    (org-caldav-import-ics-buffer-to-org)))
+    (org-caldav-import-ics-buffer-to-org (or file org-caldav-inbox))))
 
 (provide 'org-caldav)
 
