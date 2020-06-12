@@ -673,7 +673,7 @@ Are you really sure? ")))
         (cond ((null event)
                ;; Event does not yet exist in DB, so add it.
                (org-caldav-debug-print 1 (format "Org UID %s: New" uid))
-               (push '(uid md5 etag sequence status) org-caldav-event-list))
+               (push (list uid md5 nil nil 'new-in-org) org-caldav-event-list))
               ((not (string= md5 (org-caldav-event-md5 event)))
                ;; Event exists but has changed MD5, so mark it as changed.
                (org-caldav-debug-print 1 (format "Org UID %s: Changed" uid))
@@ -700,7 +700,7 @@ Are you really sure? ")))
       (cond ((not dbentry)
              ;; Event is not yet in database, so add it.
              (org-caldav-debug-print 1 (format "Cal UID %s: New" (car cur)))
-             (push '((car cur) nil (cdr cur) nil 'new-in-cal) org-caldav-event-list))
+             (push (list (car cur) nil (cdr cur) nil 'new-in-cal) org-caldav-event-list))
             ((eq (org-caldav-event-status dbentry) 'ignored)
              (org-caldav-debug-print 1 (format "Cal UID %s: Ignored." (car cur))))
             ((or
@@ -788,24 +788,28 @@ If CALENDAR is not provided, the default values will be used.
 If RESUME is non-nil, try to resume."
   (setq org-caldav-empty-calendar nil)
   (setq org-caldav-previous-calendar calendar)
+
+  (when (org-caldav-sync-do-org->cal)
+    (dolist (filename (org-caldav-get-org-files-for-sync))
+      (when (not (file-exists-p filename))
+        (if (yes-or-no-p (format "File %s does not exist, create it?" filename))
+            (write-region "" nil filename)
+          (user-error "File %s does not exist" filename)))))
+
   (let (calkeys calvalues oauth-enable)
     ;; Extrace keys and values from 'calendar' for progv binding.
     (dolist (i (number-sequence 0 (1- (length calendar)) 2))
       (setq calkeys (append calkeys (list (nth i calendar)))
 	    calvalues (append calvalues (list (nth (1+ i) calendar)))))
     (cl-progv (mapcar 'org-caldav-var-for-key calkeys) calvalues
-      (when (org-caldav-sync-do-org->cal)
-	(dolist (filename (org-caldav-get-org-files-for-sync))
-	  (when (not (file-exists-p filename))
-	    (if (yes-or-no-p (format "File %s does not exist, create it?" filename))
-		(write-region "" nil filename)
-	      (user-error "File %s does not exist" filename)))))
+
       ;; Check if we need to do OAuth2
       (when (org-caldav-use-oauth2)
 	;; We need to do oauth2. Check if it is available.
 	(org-caldav-check-oauth2 org-caldav-url)
 	;; Retrieve token
 	(org-caldav-retrieve-oauth2-token org-caldav-url org-caldav-calendar-id))
+
       (let ((numretry 0)
 	    success)
 	(while (null success)
@@ -819,6 +823,7 @@ If RESUME is non-nil, try to resume."
 	       (org-caldav-debug-print
 		1 "Got error while checking connection (will try again):" err)
 	       (cl-incf numretry))))))
+
       (unless resume
 	(setq org-caldav-event-list nil
 	      org-caldav-previous-files nil)
@@ -838,6 +843,7 @@ If RESUME is non-nil, try to resume."
 	(dolist (cur org-caldav-event-list)
 	  (unless (eq (org-caldav-event-status cur) 'ignored)
 	    (org-caldav-event-set-status cur nil)))
+
 	;; Update events for the org->cal direction
 	(when (org-caldav-sync-do-org->cal)
 	  ;; Export Org to icalendar format
