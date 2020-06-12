@@ -894,7 +894,7 @@ Should I try to resume? "))))
     (insert "Some intro tex
 BEGIN:VEVENT
 UID:123456789
-DESCRIPTION:<2020-06-16 Tue 19:00>–<2020-06-16 Tue 20:00> HUUUU HUUUUU
+DESCRIPTION: <2020-06-16 Tue 19:00>–<2020-06-16 Tue 20:00> HUUUU HUUUUU
 END:VEVENT
 END:VCALENDAR
 Some closing text")
@@ -1009,7 +1009,7 @@ This removes timestamps which weren't properly removed by
 org-icalendar."
   (save-excursion
     (goto-char (point-min))
-    (when (re-search-forward "^DESCRIPTION:.*?\\(\s*-*<[^>]+>\\(–<[^>]+>\\)?\\(\\\\n\\\\n\\)?\\)" nil t)
+    (when (re-search-forward "^DESCRIPTION:.*?\\(\s-*<[^>]+>\\(–<[^>]+>\\)?\\(\\\\n\\\\n\\)?\\)" nil t)
       (replace-match "" nil nil nil 1))))
 
 (defun org-caldav-maybe-fix-timezone ()
