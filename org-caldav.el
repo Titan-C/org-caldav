@@ -765,11 +765,11 @@ Are you really sure? ")))
   "Return list of all org files for syncing.
 This adds the inbox if necessary."
   (let ((inbox (org-caldav-inbox-file org-caldav-inbox)))
-    (append org-caldav-files
-	    (when (and inbox
-		       (org-caldav-sync-do-org->cal)
-		       (not (member inbox org-caldav-files)))
-	      (list inbox)))))
+    (append (when (and inbox
+                       (org-caldav-sync-do-org->cal)
+                       (not (member inbox org-caldav-files)))
+              (list inbox))
+            org-caldav-files)))
 
 (defun org-caldav-sync-calendar (&optional calendar resume)
   "Sync one calendar, optionally provided through plist CALENDAR.
