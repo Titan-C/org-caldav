@@ -1743,7 +1743,7 @@ This witches to OAuth2 if necessary."
 
 ;;;###autoload
 (defun org-caldav-import-ics-to-org (path &optional file)
-  "Add ics content in PATH to `org-caldav-inbox'."
+  "Add ics content in PATH to FILE or `org-caldav-inbox'."
   (with-current-buffer (get-buffer-create "*import-ics-to-org*")
     (delete-region (point-min) (point-max))
     (insert-file-contents path)
