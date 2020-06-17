@@ -1102,7 +1102,7 @@ returned as a cons (POINT . LEVEL)."
         (let ((level (org-current-level)))
           (delete-region (org-entry-beginning-position)
                          (org-entry-end-position))
-          (apply 'org-caldav-insert-org-entry (append eventdata (list uid level)))))
+          (apply 'org-caldav-insert-org-entry (append eventdata (list level)))))
       (push (list org-caldav-calendar-id uid (org-caldav-event-status event)
                   (if (eq timesync 'orgsexp) 'error:changed-orgsexp 'cal->org))
             org-caldav-sync-result)
@@ -1394,7 +1394,7 @@ Do nothing if LEVEL is larger than `org-caldav-debug-level'."
 
 (defun org-caldav-insert-org-entry (start-d start-t end-d end-t
                                             summary description location e-type
-                                            &optional uid level)
+                                            &optional uid categories level)
   "Insert org block from given data at current position.
 START/END-D: Start/End date.  START/END-T: Start/End time.
 SUMMARY, DESCRIPTION, LOCATION, UID: obvious.
@@ -1415,7 +1415,9 @@ Returns MD5 from entry."
     (org-set-property "ID" (url-unhex-string uid)))
   (org-caldav-change-location location)
   (org-back-to-heading)
-  (org-set-tags-to org-caldav-select-tags)
+  ;(org-set-tags org-caldav-select-tags)
+  (when categories
+    (org-set-tags (split-string categories "[ ,]+")))
   (md5 (buffer-substring-no-properties
 	(org-entry-beginning-position)
 	(org-entry-end-position))))
@@ -1643,6 +1645,7 @@ which can be fed into `org-caldav-insert-org-entry'."
 	 (location (icalendar--convert-string-for-import
                     (or (icalendar--get-event-property event 'LOCATION)
                         "")))
+	 (categories (icalendar--get-event-property event 'CATEGORIES))
 	 (rrule (icalendar--get-event-property event 'RRULE))
 	 (uid (icalendar--get-event-property event 'UID))
 	 (rdate (icalendar--get-event-property event 'RDATE))
@@ -1689,7 +1692,7 @@ which can be fed into `org-caldav-insert-org-entry'."
     ;; Return result
     (list start-d start-t
 	  (if end-t end-d end-1-d)
-	  end-t summary description location e-type uid)))
+	  end-t summary description location e-type uid categories)))
 
 
 ;; This is adapted from url-dav.el, written by Bill Perry.
