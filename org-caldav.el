@@ -770,6 +770,13 @@ This adds the inbox if necessary."
               (list inbox))
             org-caldav-files)))
 
+(defun org-caldav-create-new-file (filename)
+  "Create FILENAME if not exist"
+  (when (not (file-exists-p filename))
+    (if (yes-or-no-p (format "File %s does not exist, create it?" filename))
+        (write-region "" nil filename)
+      (user-error "File %s does not exist" filename))))
+
 (defun org-caldav-sync-calendar (&optional calendar resume)
   "Sync one calendar, optionally provided through plist CALENDAR.
 The format of CALENDAR is described in `org-caldav-calendars'.
@@ -780,10 +787,7 @@ If RESUME is non-nil, try to resume."
 
   (when (org-caldav-sync-do-org->cal)
     (dolist (filename (org-caldav-get-org-files-for-sync))
-      (when (not (file-exists-p filename))
-        (if (yes-or-no-p (format "File %s does not exist, create it?" filename))
-            (write-region "" nil filename)
-          (user-error "File %s does not exist" filename)))))
+      (org-caldav-create-new-file filename)))
 
   (let (calkeys calvalues oauth-enable)
     ;; Extrace keys and values from 'calendar' for progv binding.
@@ -1405,7 +1409,7 @@ Returns MD5 from entry."
   (insert (if org-adapt-indentation "  " "")
    (org-caldav-create-time-range start-d start-t end-d end-t e-type) "\n")
   (when (> (length description) 0)
-    (insert "  " description "\n"))
+    (insert " " description "\n"))
   (forward-line -1)
   (when uid
     (org-set-property "ID" (url-unhex-string uid)))
@@ -1596,6 +1600,7 @@ which can be fed into `org-caldav-insert-org-entry'."
     (set-buffer-multibyte t)
     (setq buffer-file-coding-system 'utf-8)
     (insert decoded))
+  (set-buffer (icalendar--get-unfolded-buffer (current-buffer)))
   (goto-char (point-min))
   (let* ((calendar-date-style 'european)
          (ical-list (icalendar--read-element nil nil))
@@ -1722,6 +1727,7 @@ This witches to OAuth2 if necessary."
 ;;;###autoload
 (defun org-caldav-import-ics-buffer-to-org (file)
   "Add ics content in current buffer to FILE"
+  (org-caldav-create-new-file file)
   (let ((events (org-caldav-convert-event)))
     (with-current-buffer (find-file-noselect file)
       (let* ((point-and-level (org-caldav-inbox-point-and-level file))
@@ -1743,7 +1749,7 @@ This witches to OAuth2 if necessary."
 (defun org-caldav-import-ics-to-org (path &optional file)
   "Add ics content in PATH to FILE or `org-caldav-inbox'."
   (with-current-buffer (get-buffer-create "*import-ics-to-org*")
-    (delete-region (point-min) (point-max))
+    (erase-buffer)
     (insert-file-contents path)
     (org-caldav-import-ics-buffer-to-org (or file org-caldav-inbox))))
 
