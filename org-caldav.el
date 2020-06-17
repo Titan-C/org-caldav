@@ -512,13 +512,12 @@ Also sets `org-caldav-empty-calendar' if calendar is empty."
 	(push (cons (url-unhex-string url) etag) files))))
     files))
 
-(defun org-caldav-get-event-etag-list ()
+(defun org-caldav-get-event-etag-list (url)
   "Return list of events with associated etag from remote calendar.
 Return list with elements (uid . etag)."
   (if org-caldav-empty-calendar
       nil
-    (let ((output (org-caldav-url-dav-get-properties
-		   (org-caldav-events-url) "getetag")))
+    (let ((output (org-caldav-url-dav-get-properties url "getetag")))
       (cond
        ((> (length output) 1)
 	;; Everything looks OK - we got a list of "things".
@@ -621,7 +620,7 @@ so you don't do it by accident."
     (unless (or org-caldav-empty-calendar
 		(not (y-or-n-p "This will delete EVERYTHING in your calendar. \
 Are you really sure? ")))
-      (let ((events (org-caldav-get-event-etag-list))
+      (let ((events (org-caldav-get-event-etag-list (org-caldav-events-url)))
 	    (counter 0)
 	    (url-show-status nil))
 	(dolist (cur events)
@@ -841,11 +840,12 @@ If RESUME is non-nil, try to resume."
 	  (org-caldav-update-eventdb-from-org org-caldav-ics-buffer))
 	;; Update events for the cal->org direction
 	(when (org-caldav-sync-do-cal->org)
-	  (org-caldav-update-eventdb-from-cal (org-caldav-get-event-etag-list))))
+	  (org-caldav-update-eventdb-from-cal (org-caldav-get-event-etag-list (org-caldav-events-url)))))
       (when (org-caldav-sync-do-org->cal)
 	(org-caldav-update-events-in-cal org-caldav-ics-buffer))
       (when  (org-caldav-sync-do-cal->org)
-	(org-caldav-update-events-in-org))
+	(org-caldav-update-events-in-org org-caldav-inbox)
+        (org-caldav-delete-maybe-org-entries))
       (org-caldav-save-sync-state)
       (setq org-caldav-event-list nil)
       (when (org-caldav-sync-do-org->cal)
@@ -913,7 +913,7 @@ ICSBUF is the buffer containing the exported iCalendar file."
 			  (org-caldav-filter-events 'changed-in-org)))
 	  (counter 0)
 	  (url-show-status nil)
-	  (event-etag (org-caldav-get-event-etag-list))
+	  (event-etag (org-caldav-get-event-etag-list (org-caldav-events-url)))
 	  uid)
       ;; Put the events via CalDAV.
       (dolist (cur events)
@@ -935,7 +935,7 @@ ICSBUF is the buffer containing the exported iCalendar file."
 			'error 'error:org->cal)
 		  org-caldav-sync-result))))
       ;; Get Etags
-      (setq event-etag (org-caldav-get-event-etag-list))
+      (setq event-etag (org-caldav-get-event-etag-list (org-caldav-events-url)))
       (dolist (cur events)
 	(let ((etag (assoc (car cur) event-etag)))
 	  (when (and (not (eq (org-caldav-event-status cur) 'error))
@@ -1104,8 +1104,8 @@ returned as a cons (POINT . LEVEL)."
             org-caldav-sync-result)
       (current-buffer))))
 
-(defun org-caldav-update-events-in-org ()
-  "Update events in Org files."
+(defun org-caldav-update-events-in-org (inbox)
+  "Update events in INBOX org file"
   (org-caldav-debug-print 1 "=== Updating events in Org")
   (let ((events (append (org-caldav-filter-events 'new-in-cal)
 			(org-caldav-filter-events 'changed-in-cal)))
@@ -1116,16 +1116,15 @@ returned as a cons (POINT . LEVEL)."
     (dolist (cur events)
       (catch 'next
 	(setq uid (car cur))
-	(setq counter (1+ counter))
+        (cl-incf counter)
 	(message "Getting event %d of %d" counter (length events))
         (setq eventdata (org-caldav-get-event-data cur))
 	(cond
 	 ((eq (org-caldav-event-status cur) 'new-in-cal)
 	  ;; This is a new event.
 	  (condition-case nil
-	      (with-current-buffer (find-file-noselect
-				    (org-caldav-inbox-file org-caldav-inbox))
-		(let ((point-and-level (org-caldav-inbox-point-and-level org-caldav-inbox)))
+	      (with-current-buffer (find-file-noselect (org-caldav-inbox-file inbox))
+		(let ((point-and-level (org-caldav-inbox-point-and-level inbox)))
 		  (org-caldav-debug-print
 		   1 (format "Event UID %s: New in Cal --> Org inbox." uid))
 		  (goto-char (car point-and-level))
@@ -1163,8 +1162,7 @@ which can only be synced to calendar. Ignoring." uid))
 	  (org-caldav-event-set-md5
 	   cur (md5 (buffer-substring-no-properties
 		     (org-entry-beginning-position)
-		     (org-entry-end-position))))))))
-  (org-caldav-delete-maybe-org-entries))
+		     (org-entry-end-position)))))))))
 
 (defun org-caldav-delete-maybe-org-entries ()
   "Delete entries which were deleted in calendar."
