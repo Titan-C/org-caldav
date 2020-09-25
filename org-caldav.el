@@ -360,15 +360,15 @@ Report an error with further details if that is not the case."
 	 (header nil)
 	 (options nil))
     (when (not buffer)
-      (error "Retrieving URL %s failed." url))
+      (error "Retrieving URL %s failed" url))
     (with-current-buffer buffer
       (when (zerop (buffer-size))
-	(error "Not data received for URL %s (maybe TLS problem)." url))
+	(error "Not data received for URL %s (maybe TLS problem)" url))
       (goto-char (point-min))
       (when (not (re-search-forward "^HTTP[^ ]* \\([0-9]+ .*\\)$"
 				    (point-at-eol) t))
 	(switch-to-buffer buffer)
-	(error "No valid HTTP response from URL %s." url))
+	(error "No valid HTTP response from URL %s" url))
       (let ((response (match-string 1)))
 	(when (not (string-match "2[0-9][0-9].*" response))
 	  (switch-to-buffer buffer)
