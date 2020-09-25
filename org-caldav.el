@@ -5,7 +5,7 @@
 
 ;; Author: David Engster <deng@randomsample.de>
 ;; Keywords: calendar, caldav
-;; Package-Requires: ((org "7"))
+;; Package-Requires: ((org "9"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -31,8 +31,7 @@
 
 (require 'url-dav)
 (require 'url-http) ;; b/c of Emacs bug
-(unless (require 'ox-icalendar nil t)
-  (require 'org-icalendar))
+(require 'ox-icalendar nil t)
 (require 'org-id)
 (require 'icalendar)
 (require 'url-util)
