@@ -31,7 +31,7 @@
 
 (require 'url-dav)
 (require 'url-http) ;; b/c of Emacs bug
-(require 'ox-icalendar nil t)
+(require 'ox-icalendar)
 (require 'org-id)
 (require 'icalendar)
 (require 'url-util)
@@ -1044,11 +1044,7 @@ returned as a cons (POINT . LEVEL)."
 	 (save-excursion
 	   (let ((org-link-search-inhibit-query t)
 		 level)
-	     ;; org-link-search changed signature in v8.3
-	     (with-no-warnings
-	       (if (version< org-version "8.3")
-		   (org-link-search (concat "*" (nth 2 inbox)) nil nil t)
-		 (org-link-search (concat "*" (nth 2 inbox)) nil t)))
+             (org-link-search (concat "*" (nth 2 inbox)) nil t)
 	     (setq level (1+ (org-current-level)))
 	     (org-end-of-subtree t t)
 	     (list (point) level))))
@@ -1275,10 +1271,7 @@ match org-caldav-skip-conditions."
 (defun org-caldav-generate-ics (orgfiles)
   "Generate ICS file from `org-caldav-files'.
 Returns buffer containing the ICS file."
-  (let ((icalendar-file
-	 (if (featurep 'ox-icalendar)
-	     'org-icalendar-combined-agenda-file
-	   'org-combined-agenda-icalendar-file))
+  (let ((icalendar-file 'org-icalendar-combined-agenda-file)
 	(org-export-select-tags org-caldav-select-tags)
 	(org-icalendar-exclude-tags org-caldav-exclude-tags)
         ;; We create UIDs ourselves and do not rely on ox-icalendar.el
@@ -1305,13 +1298,7 @@ Returns buffer containing the ICS file."
     (org-caldav-debug-print 1 (format "Generating ICS file %s."
 				      (symbol-value icalendar-file)))
     ;; Export events to one single ICS file.
-    (if (featurep 'ox-icalendar)
-	;; New exporter (Org 8)
-	;; Signature changed in version 8.3
-	(if (version< org-version "8.3beta")
-	    (apply 'org-icalendar--combine-files nil orgfiles)
-	  (apply 'org-icalendar--combine-files orgfiles))
-      (apply 'org-export-icalendar t orgfiles))
+    (apply 'org-icalendar--combine-files orgfiles)
     (find-file-noselect (symbol-value icalendar-file))))
 
 (defun org-caldav-get-uid ()
