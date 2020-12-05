@@ -1039,7 +1039,7 @@ For format of INBOX, see `org-caldav-inbox'."
 For format of INBOX, see `org-caldav-inbox'.  The values are
 returned as a cons (POINT . LEVEL)."
   (cond ((or (stringp inbox) (eq (car inbox) 'file))
-	 (cons (point-max) 1))
+	 (list (point-max) 1))
 	((eq (car inbox) 'file+headline)
 	 (save-excursion
 	   (let ((org-link-search-inhibit-query t)
@@ -1051,13 +1051,13 @@ returned as a cons (POINT . LEVEL)."
 		 (org-link-search (concat "*" (nth 2 inbox)) nil t)))
 	     (setq level (1+ (org-current-level)))
 	     (org-end-of-subtree t t)
-	     (cons (point) level))))
+	     (list (point) level))))
 	((eq (car inbox) 'id)
 	 (save-excursion
 	   (goto-char (cdr (org-id-find (nth 1 inbox))))
 	   (let ((level (1+ (org-current-level))))
 	     (org-end-of-subtree t t)
-	     (cons (point) level))))))
+	     (list (point) level))))))
 
 (defun org-caldav-get-event-data (event)
   (with-current-buffer (org-caldav-get-event (car event))
@@ -1132,7 +1132,7 @@ returned as a cons (POINT . LEVEL)."
 		   1 (format "Event UID %s: New in Cal --> Org inbox." uid))
 		  (goto-char (car point-and-level))
 		  (apply 'org-caldav-insert-org-entry
-			 (append eventdata (list (cdr point-and-level)))))
+			 (append eventdata (cdr point-and-level))))
 		(push (list org-caldav-calendar-id uid
 			    (org-caldav-event-status cur) 'cal->org)
 		      org-caldav-sync-result)
@@ -1590,25 +1590,28 @@ If COMPLEMENT is non-nil, return all item without errors."
 	  (setq heading (match-string 1)))))
     heading))
 
+(defun org-caldav-buffer-encoding-utf8 ()
+  (let ((decoded (decode-coding-region (point-min) (point-max) 'utf-8 t)))
+    (erase-buffer)
+    (set-buffer-multibyte t)
+    (setq buffer-file-coding-system 'utf-8)
+    (insert decoded)))
+
 ;; The following is taken from icalendar.el, written by Ulf Jasper.
 ;; The LOCATION property is added the extracted list
 (defun org-caldav-convert-event ()
   "Convert icalendar event in current buffer.
 Returns a list '(start-d start-t end-d end-t summary description location)'
 which can be fed into `org-caldav-insert-org-entry'."
-  (let ((decoded (decode-coding-region (point-min) (point-max) 'utf-8 t)))
-    (erase-buffer)
-    (set-buffer-multibyte t)
-    (setq buffer-file-coding-system 'utf-8)
-    (insert decoded))
+  (org-caldav-buffer-encoding-utf8)
   (set-buffer (icalendar--get-unfolded-buffer (current-buffer)))
   (goto-char (point-min))
   (let* ((calendar-date-style 'european)
          (ical-list (icalendar--read-element nil nil))
-         (zone-map (icalendar--convert-all-timezones ical-list))
-         events)
-    (dolist (event (icalendar--all-events ical-list) events)
-      (setq events (cons (org-caldav-create-org-entry event zone-map) events)))))
+         (zone-map (icalendar--convert-all-timezones ical-list)))
+    (mapcar (lambda (event)
+              (org-caldav-create-org-entry event zone-map))
+            (icalendar--all-events ical-list))))
 
 (defun org-caldav-create-org-entry (event zone-map)
 (let* (
@@ -1727,33 +1730,21 @@ This witches to OAuth2 if necessary."
     (< counter org-caldav-retry-attempts)))
 
 ;;;###autoload
-(defun org-caldav-import-ics-buffer-to-org (file)
+(defun org-caldav-events-to-org (events file)
   "Add ics content in current buffer to FILE"
-  (org-caldav-create-new-file file)
-  (let ((events (org-caldav-convert-event)))
-    (with-current-buffer (find-file-noselect file)
-      (let* ((point-and-level (org-caldav-inbox-point-and-level file))
-             (point (car point-and-level))
-             (level (cdr point-and-level)))
-        (goto-char point)
-        (dolist (event events)
-          (apply #'org-caldav-insert-org-entry
-                 (append event (list level)))
-          (message "%s: Added event: %s"
-                   file
-                   (buffer-substring
-                    point
-                    (save-excursion
-                      (goto-char point)
-                      (point-at-eol 2)))))))))
+  (with-current-buffer (find-file-noselect file)
+    (multiple-value-bind (point level) (org-caldav-inbox-point-and-level file)
+      (goto-char point)
+      (dolist (event events)
+        (apply #'org-caldav-insert-org-entry
+               (append event (list level)))
+        (message "%s: Added event: %s"
+                 file (nth 4 event))))))
 
 ;;;###autoload
-(defun org-caldav-import-ics-to-org (path &optional file)
-  "Add ics content in PATH to FILE or `org-caldav-inbox'."
-  (with-current-buffer (get-buffer-create "*import-ics-to-org*")
-    (erase-buffer)
-    (insert-file-contents path)
-    (org-caldav-import-ics-buffer-to-org (or file org-caldav-inbox))))
+(defun org-caldav-ics-to-events (path)
+  (with-current-buffer (find-file-noselect path)
+    (org-caldav-convert-event)))
 
 (provide 'org-caldav)
 
