@@ -7,8 +7,7 @@ Returns a list '(start-d start-t end-d end-t summary description location)'
 which can be fed into `cal-sync-insert-org-entry'."
   (with-current-buffer (icalendar--get-unfolded-buffer buffer)
     (goto-char (point-min))
-    (let* ((calendar-date-style 'european)
-           (ical-list (icalendar--read-element nil nil))
+    (let* ((ical-list (icalendar--read-element nil nil))
            (zone-map (icalendar--convert-all-timezones ical-list)))
       (mapcar (lambda (event)
                 (cal-sync-create-org-entry event zone-map))
@@ -41,7 +40,7 @@ which can be fed into `cal-sync-insert-org-entry'."
 	  (when (and dtend-dec (not (eq dtend-dec dtend-dec-d)))
 	    (message "Inconsistent endtime and duration for %s" summary))
 	  (setq dtend-dec dtend-dec-d)))
-      `((START nil ,dtstart-dec) (END nil ,dtend-dec))))
+      `((START nil ,(encode-time dtstart-dec)) (END nil ,(encode-time dtend-dec)))))
 
   (let* ((event-properties (caddr event))
          (summary (icalendar--convert-string-for-import
@@ -55,7 +54,56 @@ which can be fed into `cal-sync-insert-org-entry'."
      (-ical-times-span event-properties zone-map)
      event-properties)))
 
-(let* ((buf (find-file-noselect "/tmp/agenda-ad095ce084"))
+(defun cal-sync--org-time-range (event-properties)
+  (let ((e-type (get-prop event-properties 'E-TYPE))
+        (start (get-prop event-properties 'START))
+        (end (get-prop event-properties 'END)))
+    (concat
+     (cond
+      ((string= "S" e-type) "SCHEDULED: ")
+      ((string= "DL" e-type) "DEADLINE: ")
+      (t ""))
+     (org-timestamp-translate
+      (org-timestamp-from-time start t))
+     "--"
+     (org-timestamp-translate
+      (org-timestamp-from-time end t)))))
+
+
+(defun cal-sync--org-entry (event)
+  "Org block from given event data."
+  (with-temp-buffer
+    (insert  "* " (get-prop event 'HEADING) "\n")
+    (insert (cal-sync--org-time-range event) "\n")
+
+    (if-let ((uid (get-prop event 'UID)))
+        (org-set-property "ID" (url-unhex-string uid)))
+
+    (if-let ((location (get-prop event 'LOCATION)))
+        (and (org-string-nw-p location)
+             (org-set-property
+              "LOCATION"
+              (replace-regexp-in-string "\n" ", "
+                                        (icalendar--convert-string-for-import location)))))
+
+    (if-let ((description (get-prop event 'DESCRIPTION)))
+        (and (org-string-nw-p description)
+             (insert (icalendar--convert-string-for-import description) "\n")))
+
+    (if-let ((categories (get-prop event 'CATEGORIES)))
+        (progn
+          (org-back-to-heading)
+          (org-set-tags (split-string categories "[ ,]+"))))
+
+    (buffer-string)))
+
+(md5 (buffer-substring-no-properties
+	  (org-entry-beginning-position)
+	  (org-entry-end-position)))
+
+(let* ((buf (find-file-noselect "/tmp/agenda-36afc42317"))
        (events (cal-sync-convert-event buf)))
   (kill-buffer buf)
-  events)
+  (with-current-buffer (get-buffer-create "org-agen")
+    (dolist (ev events)
+      (insert (cal-sync--org-entry ev)))))
