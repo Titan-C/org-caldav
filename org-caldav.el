@@ -547,15 +547,13 @@ If retrieve fails, do `org-caldav-retry-attempts' retries."
 (defun org-caldav-put-event (buffer uid)
   "Add event in BUFFER to calendar.
 The filename will be derived from the UID."
-  (let ((event (with-current-buffer buffer (buffer-string))))
-    (with-temp-buffer
-      (insert org-caldav-calendar-preamble event "END:VCALENDAR\n")
-      (goto-char (point-min))
-      (org-caldav-debug-print 1 (format "Putting event UID %s." uid))
-      (org-caldav-debug-print 2 (format "Content of event UID %s: " uid) (buffer-string))
-      (setq org-caldav-empty-calendar nil)
-      (org-caldav-save-resource (concat (org-caldav-events-url) uid org-caldav-uuid-extension)
-                                (encode-coding-string (buffer-string) 'utf-8)))))
+  (let* ((event (with-current-buffer buffer (buffer-string)))
+        (entry (concat org-caldav-calendar-preamble event "END:VCALENDAR\n")))
+    (org-caldav-debug-print 1 (format "Putting event UID %s." uid))
+    (org-caldav-debug-print 2 (format "Content of event UID %s: " uid) entry)
+    (setq org-caldav-empty-calendar nil)
+    (org-caldav-save-resource (concat (org-caldav-events-url) uid org-caldav-uuid-extension)
+                              (encode-coding-string entry 'utf-8))))
 
 (defun org-caldav-delete-event (uid)
   "Delete event UID from calendar.
@@ -597,17 +595,18 @@ Are you really sure? ")))
 
 (defun org-caldav-events-url ()
   "Return URL for events."
-  (let* ((url
-	  (if (org-caldav-use-oauth2)
-	      (nth 4 (assoc org-caldav-url org-caldav-oauth2-providers))
-	    org-caldav-url))
-	 (eventsurl
-	  (if (string-match ".*%s.*" url)
-	      (format url org-caldav-calendar-id)
-	    (concat url "/" org-caldav-calendar-id "/"))))
-    (if (string-match ".*/$" eventsurl)
-	eventsurl
-      (concat eventsurl "/"))))
+  (defun end-slash (url)
+    (if (string-match ".*/$" url)
+	url
+      (concat url "/")))
+  (let ((url (end-slash
+	      (if (org-caldav-use-oauth2)
+	          (nth 4 (assoc org-caldav-url org-caldav-oauth2-providers))
+	        org-caldav-url))))
+    (end-slash
+     (if (string-match ".*%s.*" url)
+	 (format url org-caldav-calendar-id)
+       (concat url org-caldav-calendar-id)))))
 
 (defun org-caldav-update-eventdb-from-org (buf)
   "With combined ics file in BUF, update the event database."
