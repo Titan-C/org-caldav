@@ -33,6 +33,7 @@
 (require 'url-dav)
 (require 'url-http) ;; b/c of Emacs bug
 (require 'ox-icalendar)
+(require 'ox-org)
 (require 'org-id)
 (require 'icalendar)
 (require 'url-util)
@@ -1683,6 +1684,50 @@ This witches to OAuth2 if necessary."
                (append event (list level)))
         (message "%s: Added event: %s"
                  file (nth 4 event))))))
+
+
+(defun org-caldav-entry (entry contents info)
+  (replace-regexp-in-string "^DESCRIPTION:.*?\\(\\s-*<[^>]+>\\(--<[^>]+>\\)?\\(\\\\n\\\\n\\)?\\)"
+                            ""
+                            (replace-regexp-in-string "^UID:\\s-*\\(\\(DL\\|SC\\|TS\\)[0-9]*-\\)" ""
+                                                      (org-icalendar-entry entry contents info)
+                                                      nil nil 1)
+                            nil nil 1))
+
+;;(replace-regexp-in-string "^DESCRIPTION:.*?\\(\\s-*<[^>]+>\\)"
+                          ;;""
+                          ;;"SUMMARY:aktueller Status Grafana Dashboard  01:02:29        Aktueller Statu
+;;DESCRIPTION:<2020-11-13 Fri 10:30>--<2020-11-13 Fri 11:30>\nTermin verschob"
+                          ;;nil nil 1)
+
+(org-export-define-derived-backend 'caldav 'org
+  :translate-alist '((clock . ignore)
+		     (footnote-definition . ignore)
+		     (footnote-reference . ignore)
+		     (headline . org-caldav-entry)
+		     (inlinetask . ignore)
+		     (planning . ignore)
+		     (section . ignore)
+		     ;;(inner-template . (lambda (c i) c))
+		     (template . org-icalendar-template))
+  :options-alist
+  '((:exclude-tags
+     "ICALENDAR_EXCLUDE_TAGS" nil org-icalendar-exclude-tags split)
+    (:with-timestamps nil "<" org-icalendar-with-timestamps)
+    ;; Other variables.
+    (:icalendar-alarm-time nil nil org-icalendar-alarm-time)
+    (:icalendar-categories nil nil org-icalendar-categories)
+    (:icalendar-date-time-format nil nil org-icalendar-date-time-format)
+    (:icalendar-include-bbdb-anniversaries nil nil org-icalendar-include-bbdb-anniversaries)
+    (:icalendar-include-body nil nil org-icalendar-include-body)
+    (:icalendar-include-sexps nil nil org-icalendar-include-sexps)
+    (:icalendar-include-todo nil nil org-icalendar-include-todo)
+    (:icalendar-store-UID nil nil org-icalendar-store-UID)
+    (:icalendar-timezone nil nil org-icalendar-timezone)
+    (:icalendar-use-deadline nil nil org-icalendar-use-deadline)
+    (:icalendar-use-scheduled nil nil org-icalendar-use-scheduled))
+  :filters-alist
+  '((:filter-headline . org-icalendar-clear-blank-lines)))
 
 (provide 'org-caldav)
 
