@@ -29,6 +29,7 @@
 
 ;;; Code:
 
+(require 'seq)
 (require 'url-dav)
 (require 'url-http) ;; b/c of Emacs bug
 (require 'ox-icalendar)
@@ -344,12 +345,8 @@ and  action = {org->cal, cal->org, error:org->cal, error:cal->org}.")
 
 (defun org-caldav-filter-events (status)
   "Return list of events with STATUS."
-  (delq nil
-	(mapcar
-	 (lambda (event)
-	   (when (eq (car (last event)) status)
-	     event))
-	 org-caldav-event-list)))
+  (seq-filter (lambda (event) (eq (car (last event)) status)) org-caldav-event-list))
+
 
 ;; Since not being able to access an URL via DAV is the most reported
 ;; error, let's be very verbose about checking for DAV availability.
@@ -1717,6 +1714,11 @@ This witches to OAuth2 if necessary."
     (< counter org-caldav-retry-attempts)))
 
 ;;;###autoload
+(defun org-caldav-ics-to-events (path)
+  (with-current-buffer (find-file-noselect path)
+    (org-caldav-convert-event)))
+
+;;;###autoload
 (defun org-caldav-events-to-org (events file)
   "Add ics content in current buffer to FILE"
   (with-current-buffer (find-file-noselect file)
@@ -1727,11 +1729,6 @@ This witches to OAuth2 if necessary."
                (append event (list level)))
         (message "%s: Added event: %s"
                  file (nth 4 event))))))
-
-;;;###autoload
-(defun org-caldav-ics-to-events (path)
-  (with-current-buffer (find-file-noselect path)
-    (org-caldav-convert-event)))
 
 (provide 'org-caldav)
 
