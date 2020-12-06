@@ -1080,7 +1080,7 @@ returned as a cons (POINT . LEVEL)."
       (when (or (eq org-caldav-sync-changes-to-org 'title-only)
                 (eq org-caldav-sync-changes-to-org 'title-and-timestamp))
         ;; Sync title
-        (org-caldav-change-heading (nth 4 eventdata))
+        (org-edit-headline (nth 4 eventdata))
         ;; and location
         (org-caldav-change-location (nth 6 eventdata)))
       (when (or (eq org-caldav-sync-changes-to-org 'timestamp-only)
@@ -1176,29 +1176,6 @@ which can only be synced to calendar. Ignoring." uid))
 	(push (list org-caldav-calendar-id (car cur)
 		    'deleted-in-cal 'removed-from-org)
 	      org-caldav-sync-result)))))
-
-(defun org-caldav-change-heading (newheading)
-  "Change heading from Org item under point to NEWHEADING."
-  (org-narrow-to-subtree)
-  (goto-char (point-min))
-  (org-show-subtree)
-  (when (and (re-search-forward org-complex-heading-regexp nil t)
-	     (match-string 4))
-    (let ((start (match-beginning 4))
-	  (end (match-end 4)))
-      ;; Check if a timestring is in the heading
-      (goto-char start)
-      (save-excursion
-        (when (re-search-forward org-ts-regexp-both end t)
-	  ;; Check if timestring is at the beginning or end of heading
-	  (if (< (- end (match-end 0))
-		 (- (match-beginning 0) start))
-	      (setq end (1- (match-beginning 0)))
-	    (setq start (1+ (match-end 0))))))
-      (delete-region start end)
-      (goto-char start)
-      (insert newheading)))
-  (widen))
 
 (defun org-caldav-change-location (newlocation)
   "Change the LOCATION property from ORG item under point to
