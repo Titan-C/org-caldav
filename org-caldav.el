@@ -492,48 +492,25 @@ Also sets `org-caldav-empty-calendar' if calendar is empty."
 	(setq org-caldav-empty-calendar t)))
     t))
 
-;; This defun is partly taken out of url-dav.el, written by Bill Perry.
-(defun org-caldav-get-icsfiles-etags-from-properties (properties)
-  "Return all ics files and etags from PROPERTIES."
-  (let (prop files)
-    (while (setq prop (pop properties))
-      (let ((url (car prop))
-	    (etag (plist-get (cdr prop) 'DAV:getetag)))
-      (if (string-match (concat ".*/\\(.+\\)\\" org-caldav-uuid-extension "/?$") url)
-	  (setq url (match-string 1 url))
-	(setq url nil))
-      (when (string-match "\"\\(.*\\)\"" etag)
-	(setq etag (match-string 1 etag)))
-      (when (and url etag)
-	(push (cons (url-unhex-string url) etag) files))))
-    files))
+(defun org-caldav-get-icsfile-and-etag (item)
+  "Return the ics file and etag from ITEM."
+  (if-let ((url (car item))
+	   (ics (and (string-match (concat ".*/\\(.+\\)\\" org-caldav-uuid-extension "/?$") url)
+                     (url-unhex-string (match-string 1 url))))
+           (etag (plist-get (cdr item) 'DAV:getetag)))
+      (cons ics
+            (if (string-match "\"\\(.*\\)\"" etag)
+                (match-string 1 etag)
+              etag))))
+
 
 (defun org-caldav-get-event-etag-list (url)
   "Return list of events with associated etag from remote calendar.
 Return list with elements (uid . etag)."
-  (if org-caldav-empty-calendar
-      nil
-    (let ((output (org-caldav-url-dav-get-properties url "getetag")))
-      (cond
-       ((> (length output) 1)
-	;; Everything looks OK - we got a list of "things".
-	;; Get all ics files and etags you can find in there.
-	(org-caldav-get-icsfiles-etags-from-properties output))
-       ((or (null output)
-	    (zerop (length output)))
-	;; This is definitely an error.
-	(error "Error while getting eventlist from %s." (org-caldav-events-url)))
-       ((and (= (length output) 1)
-	     (stringp (car-safe (car output))))
-	(let ((status (plist-get (cdar output) 'DAV:status)))
-	  (if (eq status 200)
-	      ;; This is an empty directory
-	      'empty
-	    (if status
-		(error "Error while getting eventlist from %s. Got status code: %d."
-		       (org-caldav-events-url) status)
-	      (error "Error while getting eventlist from %s."
-		     (org-caldav-events-url))))))))))
+  (unless org-caldav-empty-calendar
+    (seq-remove #'null
+                (mapcar #'org-caldav-get-icsfile-and-etag
+                        (org-caldav-url-dav-get-properties url "getetag")))))
 
 (defun org-caldav-get-event (uid &optional with-headers)
   "Get event with UID from calendar.
