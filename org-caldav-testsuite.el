@@ -691,3 +691,30 @@ moose
 
   (org-caldav-test-cleanup)
 )
+
+(ert-deftest org-caldav-etag-extraction ()
+  (should (equal
+           (mapcar #'org-caldav-get-icsfile-and-etag
+                   '(("/ei/70/2Z-12%40m.ics" DAV:getetag "\"bfa\"")
+                     ("/ab.ics" DAV:getetag "clean")
+                     ("/bc.ics/" DAV:getetag "slash")
+                     ("/cd.ics" DAV:getetag "\"d8f\"")
+                     ("/ei/7/" DAV:getetag "\"faf0\"")))
+           '(("2Z-12@m" . "bfa")
+             ("ab" . "clean")
+             ("bc" . "slash")
+             ("cd" . "d8f")
+             nil))))
+
+(ert-deftest org-caldav-test-cleanup-event-ics ()
+  (with-temp-buffer
+    (insert "Some intro tex
+BEGIN:VEVENT
+UID:123456789
+DESCRIPTION: <2020-06-16 Tue 19:00>–<2020-06-16 Tue 20:00> HUUUU HUUUUU
+END:VEVENT
+END:VCALENDAR
+Some closing text")
+    (org-caldav-cleanup-event-ics '("123456789" nil nil nil nil))
+    (should (string= (buffer-string)
+                     "BEGIN:VEVENT\nUID:123456789\nDESCRIPTION: HUUUU HUUUUU\nEND:VEVENT\n"))))
