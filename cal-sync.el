@@ -104,3 +104,22 @@ which can be fed into `cal-sync-insert-org-entry'."
   (with-current-buffer (get-buffer-create "org-agen")
     (dolist (ev events)
       (insert (cal-sync--org-entry ev)))))
+
+(defun cal-sync-push ()
+  (interactive)
+  (let ((content (buffer-substring-no-properties
+	          (org-entry-beginning-position)
+                  (org-entry-end-position)))
+        (org-icalendar-exclude-tags '("rrule"))
+        (org-icalendar-categories '(local-tags))
+        (uid (org-id-get-create)))
+
+    (org-caldav-save-resource
+     (concat (org-caldav-events-url) uid org-caldav-uuid-extension)
+     (encode-coding-string
+      (with-current-buffer
+          (with-temp-buffer
+            (insert content)
+            (org-export-to-buffer 'caldav "testa" nil))
+        (buffer-string))
+      'utf-8))))
