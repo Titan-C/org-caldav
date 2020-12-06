@@ -430,19 +430,6 @@ This will switch to OAuth2 if necessary."
 	  (url-request-extra-headers extra-headers))
       (url-retrieve-synchronously url))))
 
-(defun org-caldav-namespace-bug-workaround (buffer)
-  "Workaraound for Emacs bug #23440 on Emacs version <26.
-This is needed for the Radicale CalDAV server which uses DAV as
-default namespace."
-  (when (< emacs-major-version 26)
-    (with-current-buffer buffer
-      (save-excursion
-	(goto-char (point-min))
-	(when (re-search-forward "<[^>]* \\(xmlns=\"DAV:\"\\)" nil t)
-	  (replace-match "xmlns:DAV=\"DAV:\"" nil nil nil 1)
-	  (goto-char (match-beginning 0))
-	  (while (re-search-forward "</?" nil t)
-	    (insert "DAV:")))))))
 
 (defun org-caldav-url-dav-get-properties (url property)
   "Retrieve PROPERTY from URL.
@@ -465,7 +452,6 @@ OAuth2 if necessary."
 	  (when (not (string-match "2[0-9][0-9].*" response))
 	    (switch-to-buffer resultbuf)
 	    (error "Error while doing PROPFIND for '%s' at URL %s: %s" property url response))))
-      (org-caldav-namespace-bug-workaround resultbuf)
       (url-dav-process-response resultbuf url))))
 
 (defun org-caldav-check-connection (url)
