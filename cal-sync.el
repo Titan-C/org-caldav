@@ -15,7 +15,11 @@ which can be fed into `cal-sync-insert-org-entry'."
            (zone-map (icalendar--convert-all-timezones ical-list)))
       (mapcar (lambda (event)
                 (cal-sync-enrich-properties event zone-map))
-              (icalendar--all-events ical-list)))))
+              (seq-remove
+               (lambda (l) (or (assq 'RRULE l)
+                               (assq 'RECURRENCE-ID l)))
+               (mapcar 'caddr (icalendar--all-events ical-list)))))))
+
 
 (defun get-property (event property) ;; like icalendar--get-event-property
   (if-let ((value (alist-get property event)))
@@ -51,10 +55,9 @@ which can be fed into `cal-sync-insert-org-entry'."
         (setq dtend-dec dtend-dec-d)))
     `((START nil ,(encode-time dtstart-dec)) (END nil ,(encode-time dtend-dec)))))
 
-(defun cal-sync-enrich-properties (event zone-map)
-  (let* ((event-properties (caddr event))
-         (summary (icalendar--convert-string-for-import
-                   (or (get-property event-properties 'SUMMARY) "No Title"))))
+(defun cal-sync-enrich-properties (event-properties zone-map)
+  (let ((summary (icalendar--convert-string-for-import
+                  (or (get-property event-properties 'SUMMARY) "No Title"))))
     (append
      (if (string-match "^\\(?:\\(DL\\|S\\):\\s+\\)?\\(.*\\)$" summary)
          `((HEADING nil ,(match-string 2 summary))
@@ -105,7 +108,7 @@ which can be fed into `cal-sync-insert-org-entry'."
           (org-back-to-heading)
           (org-set-tags (split-string categories "[ ,]+"))))
 
-    (buffer-string)))
+    (decode-coding-string (buffer-string) 'utf-8)))
 
 (defun cal-sync-events-url (server-url calendar-id)
   "Return URL for events."
