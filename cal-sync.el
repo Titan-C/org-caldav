@@ -3,6 +3,7 @@
 (require 'icalendar)
 (require 'org)
 (require 'org-element)
+(require 'ox-org)
 
 (defun cal-sync-convert-event (buffer)
   "Convert icalendar event buffer.
@@ -105,6 +106,54 @@ which can be fed into `cal-sync-insert-org-entry'."
           (org-set-tags (split-string categories "[ ,]+"))))
 
     (buffer-string)))
+
+(defun cal-sync-events-url (server-url calendar-id)
+  "Return URL for events."
+  (let ((url (file-name-as-directory server-url)))
+    (file-name-as-directory
+     (if (string-match ".*%s.*" url)
+	 (format url calendar-id)
+       (concat url calendar-id)))))
+
+;;; export
+
+(defun cal-sync-entry (entry contents info)
+  (replace-regexp-in-string "^DESCRIPTION:.*?\\(\\s-*<[^>]+>\\(--<[^>]+>\\)?\\(\\\\n\\\\n\\)?\\)"
+                            ""
+                            (replace-regexp-in-string "^UID:\\s-*\\(\\(DL\\|SC\\|TS\\)[0-9]*-\\)" ""
+                                                      (org-icalendar-entry entry contents info)
+                                                      nil nil 1)
+                            nil nil 1))
+
+(org-export-define-derived-backend 'caldav 'org
+  :translate-alist '((clock . ignore)
+		     (footnote-definition . ignore)
+		     (footnote-reference . ignore)
+		     (headline . cal-sync-entry)
+		     (inlinetask . ignore)
+		     (planning . ignore)
+		     (section . ignore)
+		     ;;(inner-template . (lambda (c i) c))
+		     (template . org-icalendar-template))
+  :options-alist
+  '((:exclude-tags
+     "ICALENDAR_EXCLUDE_TAGS" nil org-icalendar-exclude-tags split)
+    (:with-timestamps nil "<" org-icalendar-with-timestamps)
+    ;; Other variables.
+    (:icalendar-alarm-time nil nil org-icalendar-alarm-time)
+    (:icalendar-categories nil nil org-icalendar-categories)
+    (:icalendar-date-time-format nil nil org-icalendar-date-time-format)
+    (:icalendar-include-bbdb-anniversaries nil nil org-icalendar-include-bbdb-anniversaries)
+    (:icalendar-include-body nil nil org-icalendar-include-body)
+    (:icalendar-include-sexps nil nil org-icalendar-include-sexps)
+    (:icalendar-include-todo nil nil org-icalendar-include-todo)
+    (:icalendar-store-UID nil nil org-icalendar-store-UID)
+    (:icalendar-timezone nil nil org-icalendar-timezone)
+    (:icalendar-use-deadline nil nil org-icalendar-use-deadline)
+    (:icalendar-use-scheduled nil nil org-icalendar-use-scheduled))
+  :filters-alist
+  '((:filter-headline . org-icalendar-clear-blank-lines)))
+
 
 (defun cal-sync-push ()
   (interactive)
