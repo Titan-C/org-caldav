@@ -1,5 +1,8 @@
 
+(require 'subr-x)
 (require 'icalendar)
+(require 'org)
+(require 'org-element)
 
 (defun cal-sync-convert-event (buffer)
   "Convert icalendar event buffer.
@@ -13,17 +16,22 @@ which can be fed into `cal-sync-insert-org-entry'."
                 (cal-sync-enrich-properties event zone-map))
               (icalendar--all-events ical-list)))))
 
-(defun get-prop (event property) ;; equivalent icalendar--get-event-property
+(defun get-property (event property) ;; like icalendar--get-event-property
   (if-let ((value (alist-get property event)))
       (cadr value)))
 
-(defun get-attr (event property) ;; equivalent icalendar--get-event-property-attributes
+(defun get-properties (event property) ;; like icalendar--get-event-properties
+  (mapconcat 'caddr
+             (seq-filter (lambda (prop) (eq (car prop) property)) event)
+             ","))
+
+(defun get-attr (event property) ;; like icalendar--get-event-property-attributes
   (if-let ((value (alist-get property event)))
       (car value)))
 
 (defun -ical-times (event-properties property &optional zone-map)
   (icalendar--decode-isodatetime
-   (get-prop event-properties property)
+   (get-property event-properties property)
    nil
    (icalendar--find-time-zone
     (get-attr event-properties property)
@@ -31,7 +39,7 @@ which can be fed into `cal-sync-insert-org-entry'."
 
 (defun -ical-times-span (event &optional zone-map)
   (let* ((dtstart-dec (-ical-times event 'DTSTART zone-map))
-         (duration (get-prop event 'DURATION))
+         (duration (get-property event 'DURATION))
          (dtend-dec (-ical-times event 'DTEND zone-map)))
     (when duration
       (let ((dtend-dec-d (icalendar--add-decoded-times
@@ -45,7 +53,7 @@ which can be fed into `cal-sync-insert-org-entry'."
 (defun cal-sync-enrich-properties (event zone-map)
   (let* ((event-properties (caddr event))
          (summary (icalendar--convert-string-for-import
-                   (or (get-prop event-properties 'SUMMARY) "No Title"))))
+                   (or (get-property event-properties 'SUMMARY) "No Title"))))
     (append
      (if (string-match "^\\(?:\\(DL\\|S\\):\\s+\\)?\\(.*\\)$" summary)
          `((HEADING nil ,(match-string 2 summary))
@@ -56,9 +64,9 @@ which can be fed into `cal-sync-insert-org-entry'."
      event-properties)))
 
 (defun cal-sync--org-time-range (event-properties)
-  (let ((e-type (get-prop event-properties 'E-TYPE))
-        (start (get-prop event-properties 'START))
-        (end (get-prop event-properties 'END)))
+  (let ((e-type (get-property event-properties 'E-TYPE))
+        (start (get-property event-properties 'START))
+        (end (get-property event-properties 'END)))
     (concat
      (cond
       ((string= "S" e-type) "SCHEDULED: ")
@@ -74,36 +82,29 @@ which can be fed into `cal-sync-insert-org-entry'."
 (defun cal-sync--org-entry (event)
   "Org block from given event data."
   (with-temp-buffer
-    (insert  "* " (get-prop event 'HEADING) "\n")
+    (insert  "* " (get-property event 'HEADING) "\n")
     (insert (cal-sync--org-time-range event) "\n")
 
-    (if-let ((uid (get-prop event 'UID)))
+    (if-let ((uid (get-property event 'UID)))
         (org-set-property "ID" (url-unhex-string uid)))
 
-    (if-let ((location (get-prop event 'LOCATION)))
-        (and (org-string-nw-p location)
-             (org-set-property
-              "LOCATION"
-              (replace-regexp-in-string "\n" ", "
-                                        (icalendar--convert-string-for-import location)))))
+    (if-let ((location (org-string-nw-p (get-property event 'LOCATION))))
+        (org-set-property
+         "LOCATION"
+         (replace-regexp-in-string "\n" ", "
+                                   (icalendar--convert-string-for-import location))))
 
-    (if-let ((description (get-prop event 'DESCRIPTION)))
-        (and (org-string-nw-p description)
-             (insert (icalendar--convert-string-for-import description) "\n")))
+    (if-let ((description (org-string-nw-p (get-property event 'DESCRIPTION))))
+        (insert
+         (replace-regexp-in-string "\n " "\n"
+                                   (icalendar--convert-string-for-import description)) "\n"))
 
-    (if-let ((categories (get-prop event 'CATEGORIES)))
+    (if-let ((categories (org-string-nw-p (get-properties event 'CATEGORIES))))
         (progn
           (org-back-to-heading)
           (org-set-tags (split-string categories "[ ,]+"))))
 
     (buffer-string)))
-
-(let* ((buf (find-file-noselect "/tmp/agenda-36afc42317"))
-       (events (cal-sync-convert-event buf)))
-  (kill-buffer buf)
-  (with-current-buffer (get-buffer-create "org-agen")
-    (dolist (ev events)
-      (insert (cal-sync--org-entry ev)))))
 
 (defun cal-sync-push ()
   (interactive)
@@ -123,3 +124,7 @@ which can be fed into `cal-sync-insert-org-entry'."
             (org-export-to-buffer 'caldav "testa" nil))
         (buffer-string))
       'utf-8))))
+
+(provide 'cal-sync)
+
+;;; cal-sync.el ends here
