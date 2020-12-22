@@ -68,3 +68,10 @@ END:VCALENDAR
                         "^X-WR-.*?\n" ""
                         (org-export-as 'caldav)))
                       'utf-8))))))
+
+(ert-deftest test-cal-sync-error-handler ()
+  (with-current-buffer (get-buffer-create "*http-reply*")
+    (insert "HTTP/1.0 200 OK"))
+  (should (equal nil (cal-sync-error-handling nil "*http-reply*")))
+  (should (equal t (cal-sync-error-handling '(:error (error http 404)) "*http-reply*"))))
+

@@ -4,6 +4,7 @@
 (require 'org)
 (require 'org-element)
 (require 'ox-org)
+(require 'url)
 
 (defun cal-sync-convert-event (buffer)
   "Convert icalendar event buffer.
@@ -157,6 +158,22 @@ which can be fed into `cal-sync-insert-org-entry'."
   :filters-alist
   '((:filter-headline . org-icalendar-clear-blank-lines)))
 
+(defun cal-sync-error-handling (status buffer)
+  (when (or (plist-get status :error)
+            (with-current-buffer buffer
+              (goto-char (point-min))
+              (not (looking-at "HTTP.*2[0-9][0-9]"))))
+    (display-buffer buffer)
+    t))
+
+(defun cal-sync-save (url obj title)
+  (let ((url-request-method "PUT")
+	(url-request-data obj)
+	(url-request-extra-headers '(("Content-type" . "text/calendar; charset=UTF-8"))))
+    (url-retrieve url (lambda (status title)
+                        (unless (cal-sync-error-handling status (current-buffer))
+                          (message "Event \"%s\" push successful" title)))
+                  (list title))))
 
 (defun cal-sync-push ()
   (interactive)
@@ -166,16 +183,13 @@ which can be fed into `cal-sync-insert-org-entry'."
         (org-icalendar-exclude-tags '("rrule"))
         (org-icalendar-categories '(local-tags))
         (uid (org-id-get-create)))
-
-    (org-caldav-save-resource
-     (concat (org-caldav-events-url) uid org-caldav-uuid-extension)
-     (encode-coding-string
-      (with-current-buffer
-          (with-temp-buffer
-            (insert content)
-            (org-export-to-buffer 'caldav "testa" nil))
-        (buffer-string))
-      'utf-8))))
+    (cal-sync-save
+     (concat (cal-sync-events-url cal-sync-url cal-sync-calendar-id) uid ".ics")
+     (with-temp-buffer
+       (insert content)
+       (encode-coding-string
+        (org-export-as 'caldav) 'utf-8))
+     (org-entry-get nil "ITEM"))))
 
 (provide 'cal-sync)
 
