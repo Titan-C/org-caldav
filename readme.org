@@ -95,8 +95,7 @@ clean up keep the hook deactivated.
         (insert "# -*- before-save-hook: cal-sync-push; -*-\n")
         (insert org-string)))))
 
-;(url-retrieve "https://nextcloud-server-url/remote.php/dav/calendars/USERID/CALENDAR-ID/?export"
-(url-retrieve "https://cloud.oscarnajera.com/remote.php/dav/calendars/oscar/test-org-push/?export"
+(url-retrieve "https://nextcloud-server-url/remote.php/dav/calendars/USERID/CALENDAR-ID/?export"
               'cal-sync-new-calendar
               '("/tmp/calendar.org"))
 #+end_src
