@@ -19,7 +19,6 @@ feature set, yet it just solves what annoyed me in a simple way.
 - Pushes to the server run asynchronously.
 - There are no checks about events being updated on the server, this
   exporter just pushes and overwrites. There is no backup.
-- It doesn't delete events on the server
 - I only support one target calendar.
 - I don't care about Google's OAuth, I self-host nextcloud and don't use
   OAuth at the moment.

@@ -166,14 +166,20 @@ which can be fed into `cal-sync-insert-org-entry'."
     (display-buffer buffer)
     t))
 
-(defun cal-sync-save (url obj title)
-  (let ((url-request-method "PUT")
+(defun cal-sync-org-entry-action (action &optional obj)
+  (let ((url-request-method action)
 	(url-request-data obj)
-	(url-request-extra-headers '(("Content-type" . "text/calendar; charset=UTF-8"))))
-    (url-retrieve url (lambda (status title)
+	(url-request-extra-headers '(("Content-type" . "text/calendar; charset=UTF-8")))
+        (url (concat (cal-sync-events-url cal-sync-url cal-sync-calendar-id)
+                     (org-id-get-create) ".ics")))
+    (url-retrieve url (lambda (status action title)
                         (unless (cal-sync-error-handling status (current-buffer))
-                          (message "Event \"%s\" push successful" title)))
-                  (list title))))
+                          (message "%s: \"%s\" successful" action title)))
+                  (list action (org-entry-get nil "ITEM")))))
+
+(defun cal-sync-delete ()
+  (interactive)
+  (cal-sync-org-entry-action "DELETE"))
 
 (defun cal-sync-push ()
   (interactive)
@@ -181,15 +187,13 @@ which can be fed into `cal-sync-insert-org-entry'."
            (content (buffer-substring-no-properties
 	             (org-entry-beginning-position)
                      (org-entry-end-position)))
-           (org-icalendar-categories '(local-tags))
-           (uid (org-id-get-create)))
-      (cal-sync-save
-       (concat (cal-sync-events-url cal-sync-url cal-sync-calendar-id) uid ".ics")
+           (org-icalendar-categories '(local-tags)))
+      (cal-sync-org-entry-action
+       "PUT"
        (with-temp-buffer
          (insert content)
          (encode-coding-string
-          (org-export-as 'caldav) 'utf-8))
-       (org-entry-get nil "ITEM"))))
+          (org-export-as 'caldav) 'utf-8)))))
 
 (provide 'cal-sync)
 
