@@ -74,4 +74,3 @@ END:VCALENDAR
     (insert "HTTP/1.0 200 OK"))
   (should (equal nil (cal-sync-error-handling nil "*http-reply*")))
   (should (equal t (cal-sync-error-handling '(:error (error http 404)) "*http-reply*"))))
-
