@@ -5,7 +5,7 @@
 (require 'cal-sync)
 
 (ert-deftest cal-aget ()
-  (should (equal (get-attr '((a . (5))) 'a) 5)))
+  (should (equal (cal-sync-get-attr '((a . (5))) 'a) 5)))
 
 (ert-deftest test-ical-to-org ()
   (let ((org-tags-column 0)

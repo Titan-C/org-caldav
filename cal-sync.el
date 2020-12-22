@@ -22,31 +22,31 @@ which can be fed into `cal-sync-insert-org-entry'."
                (mapcar 'caddr (icalendar--all-events ical-list)))))))
 
 
-(defun get-property (event property) ;; like icalendar--get-event-property
+(defun cal-sync-get-property (event property) ;; like icalendar--get-event-property
   (if-let ((value (alist-get property event)))
       (cadr value)))
 
-(defun get-properties (event property) ;; like icalendar--get-event-properties
+(defun cal-sync-get-properties (event property) ;; like icalendar--get-event-properties
   (mapconcat 'caddr
              (seq-filter (lambda (prop) (eq (car prop) property)) event)
              ","))
 
-(defun get-attr (event property) ;; like icalendar--get-event-property-attributes
+(defun cal-sync-get-attr (event property) ;; like icalendar--get-event-property-attributes
   (if-let ((value (alist-get property event)))
       (car value)))
 
-(defun -ical-times (event-properties property &optional zone-map)
+(defun cal-sync-ical-times (event-properties property &optional zone-map)
   (icalendar--decode-isodatetime
-   (get-property event-properties property)
+   (cal-sync-get-property event-properties property)
    nil
    (icalendar--find-time-zone
-    (get-attr event-properties property)
+    (cal-sync-get-attr event-properties property)
     zone-map)))
 
-(defun -ical-times-span (event &optional zone-map)
-  (let* ((dtstart-dec (-ical-times event 'DTSTART zone-map))
-         (duration (get-property event 'DURATION))
-         (dtend-dec (-ical-times event 'DTEND zone-map)))
+(defun cal-sync-ical-times-span (event &optional zone-map)
+  (let* ((dtstart-dec (cal-sync-ical-times event 'DTSTART zone-map))
+         (duration (cal-sync-get-property event 'DURATION))
+         (dtend-dec (cal-sync-ical-times event 'DTEND zone-map)))
     (when duration
       (let ((dtend-dec-d (icalendar--add-decoded-times
                           dtstart-dec
@@ -58,20 +58,20 @@ which can be fed into `cal-sync-insert-org-entry'."
 
 (defun cal-sync-enrich-properties (event-properties zone-map)
   (let ((summary (icalendar--convert-string-for-import
-                  (or (get-property event-properties 'SUMMARY) "No Title"))))
+                  (or (cal-sync-get-property event-properties 'SUMMARY) "No Title"))))
     (append
      (if (string-match "^\\(?:\\(DL\\|S\\):\\s+\\)?\\(.*\\)$" summary)
          `((HEADING nil ,(match-string 2 summary))
            (E-TYPE nil ,(match-string 1 summary)))
        `((HEADING nil ,summary)
          (E-TYPE nil nil)))
-     (-ical-times-span event-properties zone-map)
+     (cal-sync-ical-times-span event-properties zone-map)
      event-properties)))
 
 (defun cal-sync--org-time-range (event-properties)
-  (let ((e-type (get-property event-properties 'E-TYPE))
-        (start (get-property event-properties 'START))
-        (end (get-property event-properties 'END)))
+  (let ((e-type (cal-sync-get-property event-properties 'E-TYPE))
+        (start (cal-sync-get-property event-properties 'START))
+        (end (cal-sync-get-property event-properties 'END)))
     (concat
      (cond
       ((string= "S" e-type) "SCHEDULED: ")
@@ -87,24 +87,24 @@ which can be fed into `cal-sync-insert-org-entry'."
 (defun cal-sync--org-entry (event)
   "Org block from given event data."
   (with-temp-buffer
-    (insert  "* " (get-property event 'HEADING) "\n")
+    (insert  "* " (cal-sync-get-property event 'HEADING) "\n")
     (insert (cal-sync--org-time-range event) "\n")
 
-    (if-let ((uid (get-property event 'UID)))
+    (if-let ((uid (cal-sync-get-property event 'UID)))
         (org-set-property "ID" (url-unhex-string uid)))
 
-    (if-let ((location (org-string-nw-p (get-property event 'LOCATION))))
+    (if-let ((location (org-string-nw-p (cal-sync-get-property event 'LOCATION))))
         (org-set-property
          "LOCATION"
          (replace-regexp-in-string "\n" ", "
                                    (icalendar--convert-string-for-import location))))
 
-    (if-let ((description (org-string-nw-p (get-property event 'DESCRIPTION))))
+    (if-let ((description (org-string-nw-p (cal-sync-get-property event 'DESCRIPTION))))
         (insert
          (replace-regexp-in-string "\n " "\n"
                                    (icalendar--convert-string-for-import description)) "\n"))
 
-    (if-let ((categories (org-string-nw-p (get-properties event 'CATEGORIES))))
+    (if-let ((categories (org-string-nw-p (cal-sync-get-properties event 'CATEGORIES))))
         (progn
           (org-back-to-heading)
           (org-set-tags (split-string categories "[ ,]+"))))
