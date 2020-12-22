@@ -177,19 +177,19 @@ which can be fed into `cal-sync-insert-org-entry'."
 
 (defun cal-sync-push ()
   (interactive)
-  (let ((content (buffer-substring-no-properties
-	          (org-entry-beginning-position)
-                  (org-entry-end-position)))
-        (org-icalendar-exclude-tags '("rrule"))
-        (org-icalendar-categories '(local-tags))
-        (uid (org-id-get-create)))
-    (cal-sync-save
-     (concat (cal-sync-events-url cal-sync-url cal-sync-calendar-id) uid ".ics")
-     (with-temp-buffer
-       (insert content)
-       (encode-coding-string
-        (org-export-as 'caldav) 'utf-8))
-     (org-entry-get nil "ITEM"))))
+  (if-let ((not-rrule (not (string-match-p "rrule" (or (org-entry-get nil "TAGS") ""))))
+           (content (buffer-substring-no-properties
+	             (org-entry-beginning-position)
+                     (org-entry-end-position)))
+           (org-icalendar-categories '(local-tags))
+           (uid (org-id-get-create)))
+      (cal-sync-save
+       (concat (cal-sync-events-url cal-sync-url cal-sync-calendar-id) uid ".ics")
+       (with-temp-buffer
+         (insert content)
+         (encode-coding-string
+          (org-export-as 'caldav) 'utf-8))
+       (org-entry-get nil "ITEM"))))
 
 (provide 'cal-sync)
 
