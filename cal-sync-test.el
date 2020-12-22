@@ -9,6 +9,7 @@
 
 (ert-deftest test-ical-to-org ()
   (let ((org-tags-column 0)
+        (org-export-with-author nil)
         (org-icalendar-timezone "Europe/Berlin")
         (org-icalendar-date-time-format ";TZID=%Z:%Y%m%dT%H%M%S")
         (org-icalendar-exclude-tags '("rrule"))
@@ -37,7 +38,7 @@ Take some meat
 Search for big animals in the forest\n")
         (exported-ics "BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Oscar Najera//Emacs with Org mode//EN
+PRODID:-////Emacs with Org mode//EN
 CALSCALE:GREGORIAN
 BEGIN:VEVENT\r
 UID:first\r
