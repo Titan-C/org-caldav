@@ -1,4 +1,5 @@
 
+(require 'dash)
 (require 'subr-x)
 (require 'icalendar)
 (require 'org)
@@ -14,12 +15,13 @@ which can be fed into `cal-sync-insert-org-entry'."
     (goto-char (point-min))
     (let* ((ical-list (icalendar--read-element nil nil))
            (zone-map (icalendar--convert-all-timezones ical-list)))
-      (mapcar (lambda (event)
-                (cal-sync-enrich-properties event zone-map))
-              (seq-remove
-               (lambda (l) (or (assq 'RRULE l)
-                               (assq 'RECURRENCE-ID l)))
-               (mapcar 'caddr (icalendar--all-events ical-list)))))))
+      (->> (mapcar 'caddr (icalendar--all-events ical-list))
+           (seq-remove
+            (lambda (l) (or (assq 'RRULE l)
+                            (assq 'RECURRENCE-ID l))))
+           (mapcar
+            (lambda (event)
+              (cal-sync-enrich-properties event zone-map)))))))
 
 
 (defun cal-sync-get-property (event property) ;; like icalendar--get-event-property
