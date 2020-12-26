@@ -1,5 +1,6 @@
 
 (require 'dash)
+(require 'cl-macs)
 (require 'subr-x)
 (require 'icalendar)
 (require 'org)
@@ -124,12 +125,10 @@ which can be fed into `cal-sync-insert-org-entry'."
 ;;; export
 
 (defun cal-sync-entry (entry contents info)
-  (replace-regexp-in-string "^DESCRIPTION:.*?\\(\\s-*<[^>]+>\\(--<[^>]+>\\)?\\(\\\\n\\\\n\\)?\\)"
-                            ""
-                            (replace-regexp-in-string "^UID:\\s-*\\(\\(DL\\|SC\\|TS\\)[0-9]*-\\)" ""
-                                                      (org-icalendar-entry entry contents info)
-                                                      nil nil 1)
-                            nil nil 1))
+  (cl-flet ((clean (pattern string) (replace-regexp-in-string pattern "" string nil nil 1)))
+    (->> (org-icalendar-entry entry contents info)
+         (clean "^UID:\\s-*\\(\\(DL\\|SC\\|TS\\)[0-9]*-\\)")
+         (clean "^DESCRIPTION:.*?\\(\\s-*<[^>]+>\\(--<[^>]+>\\)?\\(\\\\n\\\\n\\)?\\)"))))
 
 (org-export-define-derived-backend 'caldav 'org
   :translate-alist '((clock . ignore)
