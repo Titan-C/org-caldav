@@ -47,16 +47,15 @@ which can be fed into `cal-sync-insert-org-entry'."
     zone-map)))
 
 (defun cal-sync-ical-times-span (event &optional zone-map)
-  (let* ((dtstart-dec (cal-sync-ical-times event 'DTSTART zone-map))
-         (duration (cal-sync-get-property event 'DURATION))
-         (dtend-dec (cal-sync-ical-times event 'DTEND zone-map)))
-    (when duration
-      (let ((dtend-dec-d (icalendar--add-decoded-times
-                          dtstart-dec
-                          (icalendar--decode-isoduration duration))))
-        (when (and dtend-dec (not (eq dtend-dec dtend-dec-d)))
-          (message "Inconsistent endtime and duration for %s" summary))
-        (setq dtend-dec dtend-dec-d)))
+  (let ((dtstart-dec (cal-sync-ical-times event 'DTSTART zone-map))
+        (dtend-dec (cal-sync-ical-times event 'DTEND zone-map)))
+    (when-let ((duration (cal-sync-get-property event 'DURATION))
+               (dtend-dec-d (icalendar--add-decoded-times
+                             dtstart-dec
+                             (icalendar--decode-isoduration duration))))
+      (when (and dtend-dec (not (eq dtend-dec dtend-dec-d)))
+        (message "Inconsistent endtime and duration for %s" summary))
+      (setq dtend-dec dtend-dec-d))
     `((START nil ,(encode-time dtstart-dec)) (END nil ,(encode-time dtend-dec)))))
 
 (defun cal-sync-enrich-properties (event-properties zone-map)
