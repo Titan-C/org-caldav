@@ -95,20 +95,18 @@ which can be fed into `cal-sync-insert-org-entry'."
         (org-set-property "ID" (url-unhex-string uid)))
 
     (if-let ((location (org-string-nw-p (cal-sync-get-property event 'LOCATION))))
-        (org-set-property
-         "LOCATION"
-         (replace-regexp-in-string "\n" ", "
-                                   (icalendar--convert-string-for-import location))))
+        (->> (icalendar--convert-string-for-import location)
+             (replace-regexp-in-string "\n" ", ")
+             (org-set-property "LOCATION")))
 
     (if-let ((description (org-string-nw-p (cal-sync-get-property event 'DESCRIPTION))))
-        (insert
-         (replace-regexp-in-string "\n " "\n"
-                                   (icalendar--convert-string-for-import description)) "\n"))
+        (insert (->> (icalendar--convert-string-for-import description)
+                     (replace-regexp-in-string "\n " "\n"))
+                "\n"))
 
-    (if-let ((categories (org-string-nw-p (cal-sync-get-properties event 'CATEGORIES))))
-        (progn
-          (org-back-to-heading)
-          (org-set-tags (split-string categories "[ ,]+"))))
+    (when-let ((categories (org-string-nw-p (cal-sync-get-properties event 'CATEGORIES))))
+      (org-back-to-heading)
+      (org-set-tags (split-string categories "[ ,]+")))
 
     (decode-coding-string (buffer-string) 'utf-8)))
 
