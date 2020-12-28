@@ -72,19 +72,18 @@ which can be fed into `cal-sync-insert-org-entry'."
      event-properties)))
 
 (defun cal-sync--org-time-range (event-properties)
-  (let ((e-type (cal-sync-get-property event-properties 'E-TYPE))
-        (start (cal-sync-get-property event-properties 'START))
-        (end (cal-sync-get-property event-properties 'END)))
+  (cl-flet ((org-time (time) (-> (cal-sync-get-property event-properties time)
+                                 (org-timestamp-from-time t)
+                                 (org-timestamp-translate))))
     (concat
-     (cond
-      ((string= "S" e-type) "SCHEDULED: ")
-      ((string= "DL" e-type) "DEADLINE: ")
-      (t ""))
-     (org-timestamp-translate
-      (org-timestamp-from-time start t))
+     (let ((e-type (cal-sync-get-property event-properties 'E-TYPE)))
+       (cond
+        ((string= "S" e-type) "SCHEDULED: ")
+        ((string= "DL" e-type) "DEADLINE: ")
+        (t "")))
+     (org-time 'START)
      "--"
-     (org-timestamp-translate
-      (org-timestamp-from-time end t)))))
+     (org-time 'END))))
 
 
 (defun cal-sync--org-entry (event)
