@@ -84,31 +84,35 @@ which can be fed into `cal-sync-insert-org-entry'."
      "--"
      (org-time 'END))))
 
-
 (defun cal-sync--org-entry (event)
   "Org block from given event data."
-  (with-temp-buffer
-    (insert  "* " (cal-sync-get-property event 'HEADING) "\n")
-    (insert (cal-sync--org-time-range event) "\n")
+  (cl-macrolet
+      ((if-property
+        (property &rest body)
+        `(when-let ((,property (org-string-nw-p (cal-sync-get-properties event ',property))))
+           ,@body)))
+    (with-temp-buffer
+      (insert  "* " (cal-sync-get-property event 'HEADING) "\n")
+      (insert (cal-sync--org-time-range event) "\n")
 
-    (if-let ((uid (cal-sync-get-property event 'UID)))
-        (org-set-property "ID" (url-unhex-string uid)))
+      (if-property UID
+                   (org-set-property "ID" (url-unhex-string UID)))
 
-    (if-let ((location (org-string-nw-p (cal-sync-get-property event 'LOCATION))))
-        (->> (icalendar--convert-string-for-import location)
-             (replace-regexp-in-string "\n" ", ")
-             (org-set-property "LOCATION")))
+      (if-property LOCATION
+                   (->> (icalendar--convert-string-for-import LOCATION)
+                        (replace-regexp-in-string "\n" ", ")
+                        (org-set-property "LOCATION")))
 
-    (if-let ((description (org-string-nw-p (cal-sync-get-property event 'DESCRIPTION))))
-        (insert (->> (icalendar--convert-string-for-import description)
-                     (replace-regexp-in-string "\n " "\n"))
-                "\n"))
+      (if-property DESCRIPTION
+                   (insert (->> (icalendar--convert-string-for-import DESCRIPTION)
+                                (replace-regexp-in-string "\n " "\n"))
+                           "\n"))
 
-    (when-let ((categories (org-string-nw-p (cal-sync-get-properties event 'CATEGORIES))))
-      (org-back-to-heading)
-      (org-set-tags (split-string categories "[ ,]+")))
+      (if-property CATEGORIES
+                   (org-back-to-heading)
+                   (org-set-tags (split-string CATEGORIES "[ ,]+")))
 
-    (decode-coding-string (buffer-string) 'utf-8)))
+      (decode-coding-string (buffer-string) 'utf-8))))
 
 (defun cal-sync-events-url (server-url calendar-id)
   "Return URL for events."
