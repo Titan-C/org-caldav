@@ -178,6 +178,16 @@ which can be fed into `cal-sync-insert-org-entry'."
                           (message "%s: \"%s\" successful" action title)))
                   (list action (org-entry-get nil "ITEM")))))
 
+(defun cal-sync-import-file ()
+  (interactive)
+  (with-current-buffer (find-file-noselect "~/org/caldav.org")
+    (-> (read-file-name "Calendar ics file: ")
+        (find-file-noselect)
+        (cal-sync-convert-event)
+        (car)
+        (cal-sync--org-entry)
+        (insert))))
+
 (defun cal-sync-delete ()
   (interactive)
   (cal-sync-org-entry-action "DELETE"))
