@@ -63,15 +63,13 @@ END:VCALENDAR
                    (with-temp-buffer
                      (insert result)
                      (encode-coding-string
-                      (replace-regexp-in-string
-                       "^DTSTAMP:.*?\n" ""
-                       (replace-regexp-in-string
-                        "^X-WR-.*?\n" ""
-                        (org-export-as 'caldav)))
+                      (->> (org-export-as 'caldav)
+                           (replace-regexp-in-string "^DTSTAMP:.*?\n" "")
+                           (replace-regexp-in-string "^X-WR-.*?\n" ""))
                       'utf-8))))))
 
 (ert-deftest test-cal-sync-error-handler ()
-  (with-current-buffer (get-buffer-create "*http-reply*")
-    (insert "HTTP/1.0 200 OK"))
-  (should (equal nil (cal-sync-error-handling nil "*http-reply*")))
-  (should (equal t (cal-sync-error-handling '(:error (error http 404)) "*http-reply*"))))
+  (with-temp-buffer
+    (insert "HTTP/1.0 200 OK")
+    (should (equal nil (cal-sync-error-handling nil (current-buffer))))
+    (should (equal t (cal-sync-error-handling '(:error (error http 404)) (current-buffer))))))
