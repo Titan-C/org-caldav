@@ -16,14 +16,9 @@ which can be fed into `cal-sync-insert-org-entry'."
     (goto-char (point-min))
     (let* ((ical-list (icalendar--read-element nil nil))
            (zone-map (icalendar--convert-all-timezones ical-list)))
-      (->> (mapcar 'caddr (icalendar--all-events ical-list))
-           (seq-remove
-            (lambda (l) (or (assq 'RRULE l)
-                            (assq 'RECURRENCE-ID l))))
-           (mapcar
-            (lambda (event)
-              (cal-sync-enrich-properties event zone-map)))))))
-
+      (--keep (unless (or (assq 'RRULE it) (assq 'RECURRENCE-ID it))
+                (cal-sync-enrich-properties it zone-map))
+              (mapcar 'caddr (icalendar--all-events ical-list))))))
 
 (defun cal-sync-get-property (event property) ;; like icalendar--get-event-property
   (if-let ((value (alist-get property event)))
@@ -31,7 +26,7 @@ which can be fed into `cal-sync-insert-org-entry'."
 
 (defun cal-sync-get-properties (event property) ;; like icalendar--get-event-properties
   (mapconcat 'caddr
-             (seq-filter (lambda (prop) (eq (car prop) property)) event)
+             (--filter (eq (car it) property) event)
              ","))
 
 (defun cal-sync-get-attr (event property) ;; like icalendar--get-event-property-attributes
