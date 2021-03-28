@@ -81,28 +81,22 @@ The next code example shows how you can import your entire calendar into
 one org file. It is a simple import it does not consider changing in anyway
 the content of your events(if it had bulletpoints with =*=, they'll be org
 entries). You'll need to clean this file up. I'll store it on
-=/tmp/calendar.org=. *WARNING*: When you access it for the first time, before you
-clean up keep the hook deactivated.
+=/tmp/calendar.org=.
 #+begin_src emacs-lisp
 (defun cal-sync-new-calendar (status targe-file)
-  (unless (error-handling status (current-buffer))
+  (unless (cal-sync-error-handling status (current-buffer))
     (let ((org-string (mapconcat 'cal-sync--org-entry
                                  (cal-sync-convert-event (current-buffer))
                                  "\n")))
       (with-current-buffer (find-file-noselect targe-file)
         (erase-buffer)
         (org-mode)
-        (insert "# -*- before-save-hook: cal-sync-push; -*-\n")
         (insert org-string)))))
 
 (url-retrieve "https://nextcloud-server-url/remote.php/dav/calendars/USERID/CALENDAR-ID/?export"
               'cal-sync-new-calendar
               '("/tmp/calendar.org"))
 #+end_src
-
-#+RESULTS:
-: #<buffer  *http cloud.oscarnajera.com:443*-699394>
-
 *** Timezones
 
 Timezone handling is plain horrible, I just keep everything in UTC on the

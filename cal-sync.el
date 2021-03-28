@@ -189,6 +189,9 @@ which can be fed into `cal-sync-insert-org-entry'."
 
 (defun cal-sync-push ()
   (interactive)
+  ;; Need id before processing, otherwise when pushing content server will create a new one
+  ;; and there will be a conflict of file UID and event UID, that shows up after download.
+  (org-id-get-create)
   (if-let ((not-rrule (not (string-match-p "rrule" (or (org-entry-get nil "TAGS") ""))))
            (content (buffer-substring-no-properties
 	             (org-entry-beginning-position)
