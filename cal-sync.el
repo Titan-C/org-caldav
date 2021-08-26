@@ -80,7 +80,7 @@ which can be fed into `cal-sync-insert-org-entry'."
      (org-time 'END))))
 
 (defun cal-sync--org-entry (event)
-  "Org block from given event data."
+  "Org block from given EVENT data."
   (cl-macrolet
       ((if-property
         (property &rest body)
@@ -107,7 +107,7 @@ which can be fed into `cal-sync-insert-org-entry'."
                    (org-back-to-heading)
                    (org-set-tags (split-string CATEGORIES "[ ,]+")))
 
-      (decode-coding-string (buffer-string) 'utf-8))))
+      (buffer-string))))
 
 (defun cal-sync-events-url (server-url calendar-id)
   "Return URL for events."
@@ -175,13 +175,13 @@ which can be fed into `cal-sync-insert-org-entry'."
 
 (defun cal-sync-import-file ()
   (interactive)
-  (with-current-buffer (find-file-noselect "~/org/caldav.org")
-    (goto-char (point-max))
-    (->> (read-file-name "Calendar ics file: ")
-         (find-file-noselect)
-         (cal-sync-convert-event)
-         (mapcar #'cal-sync--org-entry)
-         (apply #'insert))))
+  (with-temp-buffer
+    (set-buffer-file-coding-system 'utf-8-unix)
+    (insert-file-contents (read-file-name "Calendar ics file: "))
+    (write-region
+     (mapconcat #'cal-sync--org-entry (cal-sync-convert-event (current-buffer)) "")
+     nil "~/org/caldav.org" t)))
+
 
 (defun cal-sync-delete ()
   (interactive)
