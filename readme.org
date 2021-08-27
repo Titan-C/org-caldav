@@ -2,12 +2,12 @@
 
 * Caldav sync for Emacs Orgmode
 
-This package is my personal take on synchronizing to one online calendar
-via caldav. I was heavily inspired by [[https://github.com/dengste/org-caldav][org-caldav]], yet it wasn't working the
-way I wanted, so I wrote my version.
+This package is my personal take on synchronizing to one online calendar via
+caldav. I was heavily inspired by [[https://github.com/dengste/org-caldav][org-caldav]], which wasn't working the way I
+wanted, and after some patches I wrote my own version.
 
-This project is a minimal take, it honestly is a step back from org-caldav
-feature set, yet it just solves what annoyed me in a simple way.
+This project is a minimal take, it is a step back from org-caldav feature set,
+yet it solves what annoyed me in a simple way.
 
 ** What is different?
 - I don't care about backwards compatibility. I run Arch Linux and only
@@ -17,12 +17,12 @@ feature set, yet it just solves what annoyed me in a simple way.
   org-mode, then I just push my edits to the caldav server. I track my
   org-files with git.
 - Pushes to the server run asynchronously.
-- There are no checks about events being updated on the server, this
+- There are no checks about events having changed on the server, this
   exporter just pushes and overwrites. There is no backup.
 - I only support one target calendar.
 - I don't care about Google's OAuth, I self-host nextcloud and don't use
   OAuth at the moment.
-- Simplified icalendar exporter it uses the org backend instead of ascii
+- Simplified icalendar exporter. I use the org backend instead of ascii
   backend, thus the syntax does not get damaged on export. It looks fine on
   the caldav calendar and it is much simpler when importing again from ics
   to org.
@@ -45,7 +45,7 @@ uniquely identify Org entries.
 iCalendar entry, so there is no one-to-one correspondence between the two
 formats which makes syncing a bit difficult. The converse is also true, the
 importer has no idea about concepts like attendees, organizers, reminders
-and it completely ignores recurring events.
+and it intentionally ignores recurring events.
 
 ** Setup
 - Create a new calendar in your server, the name does not matter
