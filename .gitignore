@@ -1,1 +1,3 @@
 *.elc
+/testbox/
+/radicale-test/

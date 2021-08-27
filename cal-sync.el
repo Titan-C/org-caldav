@@ -1,6 +1,17 @@
+;;; cal-sync.el --- Pushing org events to caldav server -*- lexical-binding: t; -*-
+;;
+;; Version: 0.0.1
+;; Homepage: https://github.com/titan-c/org-caldav
+;; Package-Requires: ((emacs "27.1"))
+;;
+;;; Commentary:
+;;
+;; Export org entries that represent events to a caldav server.
+;;
+;;; Code:
 
 (require 'dash)
-(require 'cl-macs)
+(require 'cl-lib)
 (require 'subr-x)
 (require 'icalendar)
 (require 'org)
@@ -8,8 +19,22 @@
 (require 'ox-org)
 (require 'url)
 
+(defgroup cal-sync nil
+  "Web Calendar configuration"
+  :group 'external)
+
+(defcustom cal-sync-url ""
+  "Caldav server url.
+For a nextcloud server it looks like this:
+https://nextcloud-server-url/remote.php/dav/calendars/USERID"
+  :type 'string)
+
+(defcustom cal-sync-calendar-id ""
+  "Calendar id."
+  :type 'string)
+
 (defun cal-sync-convert-event (buffer)
-  "Convert icalendar event buffer.
+  "Convert icalendar event in BUFFER.
 Returns a list '(start-d start-t end-d end-t summary description location)'
 which can be fed into `cal-sync-insert-org-entry'."
   (with-current-buffer (icalendar--get-unfolded-buffer buffer)
@@ -21,27 +46,34 @@ which can be fed into `cal-sync-insert-org-entry'."
               (mapcar 'caddr (icalendar--all-events ical-list))))))
 
 (defun cal-sync-get-property (event property) ;; like icalendar--get-event-property
+  "Wrapper around `alist-get' that understands EVENT structure and gets the correct PROPERTY."
   (if-let ((value (alist-get property event)))
       (cadr value)))
 
 (defun cal-sync-get-properties (event property) ;; like icalendar--get-event-properties
+  "Collect as comma separated string all occurrences of PROPERTY in EVENT."
   (mapconcat 'caddr
              (--filter (eq (car it) property) event)
              ","))
 
 (defun cal-sync-get-attr (event property) ;; like icalendar--get-event-property-attributes
+  "Wrapper around `alist-get' that understands EVENT structure and gets the attribute of PROPERTY."
   (if-let ((value (alist-get property event)))
       (car value)))
 
-(defun cal-sync-ical-times (event-properties property &optional zone-map)
+(defun cal-sync-ical-times (event time-property &optional zone-map)
+  "Return the iso date string of TIME-PROPERTY from EVENT considering ZONE-MAP.
+TIME-PROPERTY can be DTSTART, DTEND, DURATION"
   (icalendar--decode-isodatetime
-   (cal-sync-get-property event-properties property)
+   (cal-sync-get-property event time-property)
    nil
    (icalendar--find-time-zone
-    (cal-sync-get-attr event-properties property)
+    (cal-sync-get-attr event time-property)
     zone-map)))
 
-(defun cal-sync-ical-times-span (event &optional zone-map)
+(defun cal-sync-ical-times-span (event summary &optional zone-map)
+  "Calculate the start and end times of EVENT considering ZONE-MAP.
+SUMMARY is for warning message to recognize event."
   (let ((dtstart-dec (cal-sync-ical-times event 'DTSTART zone-map))
         (dtend-dec (cal-sync-ical-times event 'DTEND zone-map)))
     (when-let ((duration (cal-sync-get-property event 'DURATION))
@@ -54,6 +86,7 @@ which can be fed into `cal-sync-insert-org-entry'."
     `((START nil ,(encode-time dtstart-dec)) (END nil ,(encode-time dtend-dec)))))
 
 (defun cal-sync-enrich-properties (event-properties zone-map)
+  "Add additional properties to EVENT-PROPERTIES considering ZONE-MAP."
   (let ((summary (icalendar--convert-string-for-import
                   (or (cal-sync-get-property event-properties 'SUMMARY) "No Title"))))
     (append
@@ -62,10 +95,11 @@ which can be fed into `cal-sync-insert-org-entry'."
            (E-TYPE nil ,(match-string 1 summary)))
        `((HEADING nil ,summary)
          (E-TYPE nil nil)))
-     (cal-sync-ical-times-span event-properties zone-map)
+     (cal-sync-ical-times-span event-properties summary zone-map)
      event-properties)))
 
 (defun cal-sync--org-time-range (event-properties)
+  "Construct `org-mode' timestamp range out of the EVENT-PROPERTIES."
   (cl-flet ((org-time (time) (-> (cal-sync-get-property event-properties time)
                                  (org-timestamp-from-time t)
                                  (org-timestamp-translate))))
@@ -110,7 +144,7 @@ which can be fed into `cal-sync-insert-org-entry'."
       (buffer-string))))
 
 (defun cal-sync-events-url (server-url calendar-id)
-  "Return URL for events."
+  "Compose the events URL out of SERVER-URL and the CALENDAR-ID."
   (let ((url (file-name-as-directory server-url)))
     (file-name-as-directory
      (if (string-match ".*%s.*" url)
@@ -120,6 +154,12 @@ which can be fed into `cal-sync-insert-org-entry'."
 ;;; export
 
 (defun cal-sync-entry (entry contents info)
+  "Transcode ENTRY element into iCalendar format.
+
+ENTRY is either a headline or an inlinetask.  CONTENTS is
+ignored.  INFO is a plist used as a communication channel.
+
+This cleans up the output of `org-icalendar-entry'."
   (cl-flet ((clean (pattern string) (replace-regexp-in-string pattern "" string nil nil 1)))
     (->> (org-icalendar-entry entry contents info)
          (clean "^UID:\\s-*\\(\\(DL\\|SC\\|TS\\)[0-9]*-\\)")
@@ -155,6 +195,9 @@ which can be fed into `cal-sync-insert-org-entry'."
   '((:filter-headline . org-icalendar-clear-blank-lines)))
 
 (defun cal-sync-error-handling (status buffer)
+  "Utility function to signal errors when communicating to server.
+STATUS is the request response status.
+BUFFER is the request buffer."
   (when (or (plist-get status :error)
             (with-current-buffer buffer
               (goto-char (point-min))
@@ -163,6 +206,8 @@ which can be fed into `cal-sync-insert-org-entry'."
     t))
 
 (defun cal-sync-org-entry-action (action &optional obj)
+  "Execute a request ACTION on server.
+OBJ contains all data to send to server."
   (let ((url-request-method action)
 	(url-request-data obj)
 	(url-request-extra-headers '(("Content-type" . "text/calendar; charset=UTF-8")))
@@ -173,21 +218,24 @@ which can be fed into `cal-sync-insert-org-entry'."
                           (message "%s: \"%s\" successful" action title)))
                   (list action (org-entry-get nil "ITEM")))))
 
-(defun cal-sync-import-file ()
-  (interactive)
+(defun cal-sync-import-file (ics-file)
+  "Import an ICS-FILE into the main agenda file."
+  (interactive (list (read-file-name "Calendar ics file: ")))
   (with-temp-buffer
     (set-buffer-file-coding-system 'utf-8-unix)
-    (insert-file-contents (read-file-name "Calendar ics file: "))
+    (insert-file-contents ics-file)
     (write-region
      (mapconcat #'cal-sync--org-entry (cal-sync-convert-event (current-buffer)) "")
      nil "~/org/caldav.org" t)))
 
 
 (defun cal-sync-delete ()
+  "Delete current org node on the server."
   (interactive)
   (cal-sync-org-entry-action "DELETE"))
 
 (defun cal-sync-push ()
+  "Push current org node to the server."
   (interactive)
   ;; Need id before processing, otherwise when pushing content server will create a new one
   ;; and there will be a conflict of file UID and event UID, that shows up after download.
@@ -205,5 +253,4 @@ which can be fed into `cal-sync-insert-org-entry'."
           (org-export-as 'caldav) 'utf-8)))))
 
 (provide 'cal-sync)
-
 ;;; cal-sync.el ends here

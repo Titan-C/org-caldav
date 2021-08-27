@@ -1,7 +1,7 @@
 ;; Run it from the org-caldav directory like this:
-;; emacs --batch -Q -L . -l cal-sync-test.el -f ert-run-tests-batch-and-exit
+;; ./makem.sh -vv --sandbox=testbox all
 
-(load "/home/titan/.emacs.d/elpa/dash-20210308.2109/dash")
+;;; Code:
 (require 'ert)
 (require 'cal-sync)
 
