@@ -20,7 +20,7 @@
 (require 'url)
 
 (defgroup cal-sync nil
-  "Web Calendar configuration"
+  "Web Calendar configuration."
   :group 'external)
 
 (defcustom cal-sync-url ""
@@ -46,9 +46,9 @@ which can be fed into `cal-sync-insert-org-entry'."
               (mapcar 'caddr (icalendar--all-events ical-list))))))
 
 (defun cal-sync-get-property (event property) ;; like icalendar--get-event-property
-  "Wrapper around `alist-get' that understands EVENT structure and gets the correct PROPERTY."
-  (if-let ((value (alist-get property event)))
-      (cadr value)))
+  "Get the correct PROPERTY from EVENT.
+Wrapper around `alist-get' that understands EVENT structure."
+  (-some-> (alist-get property event) (cadr)))
 
 (defun cal-sync-get-properties (event property) ;; like icalendar--get-event-properties
   "Collect as comma separated string all occurrences of PROPERTY in EVENT."
@@ -57,19 +57,18 @@ which can be fed into `cal-sync-insert-org-entry'."
              ","))
 
 (defun cal-sync-get-attr (event property) ;; like icalendar--get-event-property-attributes
-  "Wrapper around `alist-get' that understands EVENT structure and gets the attribute of PROPERTY."
-  (if-let ((value (alist-get property event)))
-      (car value)))
+  "Get the correct attribute of PROPERTY from EVENT.
+Wrapper around `alist-get' that understands EVENT structure."
+  (-some-> (alist-get property event) (car)))
 
 (defun cal-sync-ical-times (event time-property &optional zone-map)
   "Return the iso date string of TIME-PROPERTY from EVENT considering ZONE-MAP.
 TIME-PROPERTY can be DTSTART, DTEND, DURATION"
-  (icalendar--decode-isodatetime
-   (cal-sync-get-property event time-property)
-   nil
-   (icalendar--find-time-zone
-    (cal-sync-get-attr event time-property)
-    zone-map)))
+  (--> (cal-sync-get-attr event time-property)
+       (icalendar--find-time-zone it zone-map)
+       (icalendar--decode-isodatetime
+        (cal-sync-get-property event time-property)
+        nil it)))
 
 (defun cal-sync-ical-times-span (event summary &optional zone-map)
   "Calculate the start and end times of EVENT considering ZONE-MAP.
@@ -83,12 +82,14 @@ SUMMARY is for warning message to recognize event."
       (when (and dtend-dec (not (eq dtend-dec dtend-dec-d)))
         (message "Inconsistent endtime and duration for %s" summary))
       (setq dtend-dec dtend-dec-d))
-    `((START nil ,(encode-time dtstart-dec)) (END nil ,(encode-time dtend-dec)))))
+    `((START nil ,(encode-time dtstart-dec))
+      (END nil ,(encode-time dtend-dec)))))
 
 (defun cal-sync-enrich-properties (event-properties zone-map)
   "Add additional properties to EVENT-PROPERTIES considering ZONE-MAP."
   (let ((summary (icalendar--convert-string-for-import
-                  (or (cal-sync-get-property event-properties 'SUMMARY) "No Title"))))
+                  (or (cal-sync-get-property event-properties 'SUMMARY)
+                      "No Title"))))
     (append
      (if (string-match "^\\(?:\\(DL\\|S\\):\\s+\\)?\\(.*\\)$" summary)
          `((HEADING nil ,(match-string 2 summary))
@@ -115,31 +116,32 @@ SUMMARY is for warning message to recognize event."
 
 (defun cal-sync--org-entry (event)
   "Org block from given EVENT data."
-  (cl-macrolet
-      ((if-property
-        (property &rest body)
-        `(when-let ((,property (org-string-nw-p (cal-sync-get-properties event ',property))))
-           ,@body)))
+  (cl-flet ((prop (symbol)
+                  (-some-> (cal-sync-get-properties event symbol)
+                    (org-string-nw-p)
+                    (string-trim))))
     (with-temp-buffer
       (insert  "* " (cal-sync-get-property event 'HEADING) "\n")
       (insert (cal-sync--org-time-range event) "\n")
 
-      (if-property UID
-                   (org-set-property "ID" (url-unhex-string UID)))
+      (-some->> (prop 'UID)
+        (url-unhex-string)
+        (org-set-property "ID"))
 
-      (if-property LOCATION
-                   (->> (icalendar--convert-string-for-import LOCATION)
-                        (replace-regexp-in-string "\n" ", ")
-                        (org-set-property "LOCATION")))
+      (-some->> (prop 'LOCATION)
+        (icalendar--convert-string-for-import)
+        (replace-regexp-in-string "\n" ", ")
+        (org-set-property "LOCATION"))
 
-      (if-property DESCRIPTION
-                   (insert (->> (icalendar--convert-string-for-import DESCRIPTION)
-                                (replace-regexp-in-string "\n " "\n"))
-                           "\n"))
+      (-some--> (prop 'DESCRIPTION)
+        (icalendar--convert-string-for-import it)
+        (replace-regexp-in-string "\n " "\n" it)
+        (insert it "\n"))
 
-      (if-property CATEGORIES
-                   (org-back-to-heading)
-                   (org-set-tags (split-string CATEGORIES "[ ,]+")))
+      (org-back-to-heading)
+      (-some-> (prop 'CATEGORIES)
+        (split-string "[ ,]+")
+        (org-set-tags))
 
       (buffer-string))))
 
@@ -148,7 +150,7 @@ SUMMARY is for warning message to recognize event."
   (let ((url (file-name-as-directory server-url)))
     (file-name-as-directory
      (if (string-match ".*%s.*" url)
-	 (format url calendar-id)
+         (format url calendar-id)
        (concat url calendar-id)))))
 
 ;;; export
@@ -209,8 +211,8 @@ BUFFER is the request buffer."
   "Execute a request ACTION on server.
 OBJ contains all data to send to server."
   (let ((url-request-method action)
-	(url-request-data obj)
-	(url-request-extra-headers '(("Content-type" . "text/calendar; charset=UTF-8")))
+        (url-request-data obj)
+        (url-request-extra-headers '(("Content-type" . "text/calendar; charset=UTF-8")))
         (url (concat (cal-sync-events-url cal-sync-url cal-sync-calendar-id)
                      (org-id-get-create) ".ics")))
     (url-retrieve url (lambda (status action title)
@@ -242,7 +244,7 @@ OBJ contains all data to send to server."
   (org-id-get-create)
   (if-let ((not-rrule (not (string-match-p "rrule" (or (org-entry-get nil "TAGS") ""))))
            (content (buffer-substring-no-properties
-	             (org-entry-beginning-position)
+                     (org-entry-beginning-position)
                      (org-entry-end-position)))
            (org-icalendar-categories '(local-tags)))
       (cal-sync-org-entry-action
