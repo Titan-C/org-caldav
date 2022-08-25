@@ -121,6 +121,7 @@ SUMMARY is for warning message to recognize event."
                     (org-string-nw-p)
                     (string-trim))))
     (with-temp-buffer
+      (org-mode)
       (insert  "* " (cal-sync-get-property event 'HEADING) "\n")
       (insert (cal-sync--org-time-range event) "\n")
 
