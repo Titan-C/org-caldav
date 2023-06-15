@@ -8,6 +8,15 @@
 (ert-deftest cal-aget ()
   (should (equal (cal-sync-get-attr '((a . (5))) 'a) 5)))
 
+(ert-deftest cal-time-span ()
+  (should (equal
+           '((ORG-TIME nil "<2022-11-05 Sat 00:00>"))
+           (cal-sync-ical-times-span '((DTSTART (VALUE "DATE") "20221105T000000")) "test")))
+  (should (equal
+           '((ORG-TIME nil "<2022-11-05 Sat 00:00>--<2022-12-06 Tue 07:00>"))
+           (cal-sync-ical-times-span '((DTSTART (VALUE "DATE") "20221105T000000")
+                                       (DTEND   (VALUE "DATE") "20221206T070000")) "test"))))
+
 (ert-deftest test-ical-to-org ()
   (let ((org-tags-column 0)
         (org-export-with-author nil)

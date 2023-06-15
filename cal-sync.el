@@ -41,9 +41,10 @@ which can be fed into `cal-sync-insert-org-entry'."
     (goto-char (point-min))
     (let* ((ical-list (icalendar--read-element nil nil))
            (zone-map (icalendar--convert-all-timezones ical-list)))
-      (--keep (unless (or (assq 'RRULE it) (assq 'RECURRENCE-ID it))
-                (cal-sync-enrich-properties it zone-map))
-              (mapcar 'caddr (icalendar--all-events ical-list))))))
+      (--keep
+       (unless (or (assq 'RRULE (caddr it)) (assq 'RECURRENCE-ID (caddr it)))
+         (cal-sync-enrich-properties (caddr it) zone-map))
+       (icalendar--all-events ical-list)))))
 
 (defun cal-sync-get-property (event property) ;; like icalendar--get-event-property
   "Get the correct PROPERTY from EVENT.
@@ -82,8 +83,12 @@ SUMMARY is for warning message to recognize event."
       (when (and dtend-dec (not (eq dtend-dec dtend-dec-d)))
         (message "Inconsistent endtime and duration for %s" summary))
       (setq dtend-dec dtend-dec-d))
-    `((START nil ,(encode-time dtstart-dec))
-      (END nil ,(encode-time dtend-dec)))))
+    (cl-flet ((org-time (time) (-some-> time (encode-time)
+                                        (org-timestamp-from-time t)
+                                        (org-timestamp-translate))))
+      `((ORG-TIME nil ,(concat (org-time dtstart-dec)
+                               (when dtend-dec
+                                 (concat "--" (org-time dtend-dec)))))))))
 
 (defun cal-sync-enrich-properties (event-properties zone-map)
   "Add additional properties to EVENT-PROPERTIES considering ZONE-MAP."
@@ -101,18 +106,13 @@ SUMMARY is for warning message to recognize event."
 
 (defun cal-sync--org-time-range (event-properties)
   "Construct `org-mode' timestamp range out of the EVENT-PROPERTIES."
-  (cl-flet ((org-time (time) (-> (cal-sync-get-property event-properties time)
-                                 (org-timestamp-from-time t)
-                                 (org-timestamp-translate))))
-    (concat
-     (let ((e-type (cal-sync-get-property event-properties 'E-TYPE)))
-       (cond
-        ((string= "S" e-type) "SCHEDULED: ")
-        ((string= "DL" e-type) "DEADLINE: ")
-        (t "")))
-     (org-time 'START)
-     "--"
-     (org-time 'END))))
+  (concat
+   (let ((e-type (cal-sync-get-property event-properties 'E-TYPE)))
+     (cond
+      ((string= "S" e-type) "SCHEDULED: ")
+      ((string= "DL" e-type) "DEADLINE: ")
+      (t "")))
+   (cal-sync-get-property event-properties 'ORG-TIME)))
 
 (defun cal-sync--org-entry (event)
   "Org block from given EVENT data."
