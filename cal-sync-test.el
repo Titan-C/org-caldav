@@ -10,10 +10,10 @@
 
 (ert-deftest cal-time-span ()
   (should (equal
-           '((ORG-TIME nil "<2022-11-05 Sat 00:00>"))
+           '((ORG-TIME nil "<2022-11-05 Sat>"))
            (cal-sync-ical-times-span '((DTSTART (VALUE "DATE") "20221105T000000")) "test")))
   (should (equal
-           '((ORG-TIME nil "<2022-11-05 Sat 00:00>--<2022-12-06 Tue 07:00>"))
+           '((ORG-TIME nil "<2022-11-05 Sat>--<2022-12-06 Tue 07:00>"))
            (cal-sync-ical-times-span '((DTSTART (VALUE "DATE") "20221105T000000")
                                        (DTEND   (VALUE "DATE") "20221206T070000")) "test"))))
 

@@ -33,18 +33,22 @@ https://nextcloud-server-url/remote.php/dav/calendars/USERID"
   "Calendar id."
   :type 'string)
 
-(defun cal-sync-convert-event (buffer)
-  "Convert icalendar event in BUFFER.
-Returns a list '(start-d start-t end-d end-t summary description location)'
-which can be fed into `cal-sync-insert-org-entry'."
+(defun cal-sync-parse (buffer)
+  "Parse icalendar BUFFER.
+Returns a list of all events and the `zone-map'."
   (with-current-buffer (icalendar--get-unfolded-buffer buffer)
     (goto-char (point-min))
-    (let* ((ical-list (icalendar--read-element nil nil))
-           (zone-map (icalendar--convert-all-timezones ical-list)))
-      (--keep
-       (unless (or (assq 'RRULE (caddr it)) (assq 'RECURRENCE-ID (caddr it)))
-         (cal-sync-enrich-properties (caddr it) zone-map))
-       (icalendar--all-events ical-list)))))
+    (let ((ical-list (icalendar--read-element nil nil)))
+      (list (cl-loop for elt in ical-list
+                     nconc (icalendar--get-children elt 'VEVENT))
+            (icalendar--convert-all-timezones ical-list)))))
+
+(defun cal-sync-convert-event (buffer)
+  (cl-destructuring-bind (events zone-map) (cal-sync-parse buffer)
+    (--keep
+     (unless (or (assq 'RRULE (caddr it)) (assq 'RECURRENCE-ID (caddr it)))
+       (cal-sync-enrich-properties (caddr it) zone-map))
+     events)))
 
 (defun cal-sync-get-property (event property) ;; like icalendar--get-event-property
   "Get the correct PROPERTY from EVENT.
@@ -83,9 +87,13 @@ SUMMARY is for warning message to recognize event."
       (when (and dtend-dec (not (eq dtend-dec dtend-dec-d)))
         (message "Inconsistent endtime and duration for %s" summary))
       (setq dtend-dec dtend-dec-d))
-    (cl-flet ((org-time (time) (-some-> time (encode-time)
-                                        (org-timestamp-from-time t)
-                                        (org-timestamp-translate))))
+    (cl-flet ((org-time (time)
+                        (when time
+                          (cl-destructuring-bind (sec min hour . rest) time
+                            (org-timestamp-translate
+                             (org-timestamp-from-time
+                              (encode-time time)
+                              (not (= 0 sec min hour))))))))
       `((ORG-TIME nil ,(concat (org-time dtstart-dec)
                                (when dtend-dec
                                  (concat "--" (org-time dtend-dec)))))))))
@@ -230,7 +238,6 @@ OBJ contains all data to send to server."
     (write-region
      (mapconcat #'cal-sync--org-entry (cal-sync-convert-event (current-buffer)) "")
      nil "~/org/caldav.org" t)))
-
 
 (defun cal-sync-delete ()
   "Delete current org node on the server."
