@@ -26,6 +26,16 @@
         (org-icalendar-categories '(local-tags))
         (org-agenda-default-appointment-duration nil)
         (input "BEGIN:VCALENDAR
+BEGIN:VTIMEZONE
+TZID:America/Guayaquil
+BEGIN:STANDARD
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0500
+TZNAME:EST
+DTSTART:19930205T000000
+RRULE:FREQ=YEARLY;BYMONTH=1;BYDAY=1SU
+END:STANDARD
+END:VTIMEZONE
 BEGIN:VEVENT
 UID:first
 SUMMARY:Feed the dragons
@@ -78,7 +88,7 @@ CATEGORIES:pets,dragons,hunting\r
 END:VEVENT
 BEGIN:VEVENT\r
 UID:922bd4ce-df85-4d69-a3f7-d56220c146a9\r
-DTSTART;TZID=Europe/Berlin:20200824T070000\r
+DTSTART;TZID=Europe/Berlin:20200824T140000\r
 DTEND;TZID=Europe/Berlin:20200824T150000\r
 SUMMARY:Conversar\r
 DESCRIPTION:\r
