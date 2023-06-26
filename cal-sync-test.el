@@ -37,6 +37,17 @@ DESCRIPTION:Take some meat\\nSearch for big
 CATEGORIES:pets,dragons
 CATEGORIES:hunting
 END:VEVENT
+BEGIN:VEVENT
+CREATED:20230622T132317Z
+DTSTAMP:20230622T132400Z
+LAST-MODIFIED:20230622T132400Z
+SEQUENCE:2
+UID:922bd4ce-df85-4d69-a3f7-d56220c146a9
+DTSTART;TZID=America/Guayaquil:20200824T070000
+DTEND;TZID=Europe/Berlin:20200824T150000
+STATUS:CONFIRMED
+SUMMARY:Conversar
+END:VEVENT
 END:VCALENDAR")
         (result "* Feed the dragons :pets:dragons:hunting:
 :PROPERTIES:
@@ -45,7 +56,12 @@ END:VCALENDAR")
 :END:
 <2020-03-19 Thu 10:30>--<2020-03-19 Thu 11:30>
 Take some meat
-Search for big animals in the forest\n")
+Search for big animals in the forest
+* Conversar
+:PROPERTIES:
+:ID:       922bd4ce-df85-4d69-a3f7-d56220c146a9
+:END:
+<2020-08-24 Mon 14:00>--<2020-08-24 Mon 15:00>\n")
         (exported-ics "BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-////Emacs with Org mode//EN
@@ -59,6 +75,14 @@ LOCATION:forest\r
 DESCRIPTION:\\nTake some meat\\\r
  nSearch for big animals in the forest\r
 CATEGORIES:pets,dragons,hunting\r
+END:VEVENT
+BEGIN:VEVENT\r
+UID:922bd4ce-df85-4d69-a3f7-d56220c146a9\r
+DTSTART;TZID=Europe/Berlin:20200824T070000\r
+DTEND;TZID=Europe/Berlin:20200824T150000\r
+SUMMARY:Conversar\r
+DESCRIPTION:\r
+CATEGORIES:\r
 END:VEVENT
 END:VCALENDAR
 "))

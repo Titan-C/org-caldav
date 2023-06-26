@@ -33,6 +33,10 @@ https://nextcloud-server-url/remote.php/dav/calendars/USERID"
   "Calendar id."
   :type 'string)
 
+(defcustom cal-sync-calendar-file "~/org/caldav.org"
+  "Org file with agenda."
+  :type 'string)
+
 (defun cal-sync-parse (buffer)
   "Parse icalendar BUFFER.
 Returns a list of all events and the `zone-map'."
@@ -152,7 +156,7 @@ SUMMARY is for warning message to recognize event."
         (split-string "[ ,]+")
         (org-set-tags))
 
-      (buffer-string))))
+      (buffer-substring-no-properties (point-min) (point-max)))))
 
 (defun cal-sync-events-url (server-url calendar-id)
   "Compose the events URL out of SERVER-URL and the CALENDAR-ID."
@@ -229,15 +233,14 @@ OBJ contains all data to send to server."
                           (message "%s: \"%s\" successful" action title)))
                   (list action (org-entry-get nil "ITEM")))))
 
+(defun cal-sync-parse-file (ics-file)
+  (mapcar #'cal-sync--org-entry (cal-sync-convert-event (find-file-noselect ics-file))))
+
 (defun cal-sync-import-file (ics-file)
   "Import an ICS-FILE into the main agenda file."
   (interactive (list (read-file-name "Calendar ics file: ")))
-  (with-temp-buffer
-    (set-buffer-file-coding-system 'utf-8-unix)
-    (insert-file-contents ics-file)
-    (write-region
-     (mapconcat #'cal-sync--org-entry (cal-sync-convert-event (current-buffer)) "")
-     nil "~/org/caldav.org" t)))
+  (dolist (event (cal-sync-parse-file ics-file))
+    (write-region event nil cal-sync-calendar-file t)))
 
 (defun cal-sync-delete ()
   "Delete current org node on the server."
