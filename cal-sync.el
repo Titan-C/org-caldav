@@ -38,21 +38,16 @@ https://nextcloud-server-url/remote.php/dav/calendars/USERID"
   :type 'string)
 
 (defun cal-sync-parse (buffer)
-  "Parse icalendar BUFFER.
-Returns a list of all events and the `zone-map'."
+  "Parse icalendar BUFFER. Returns a list of all events."
   (with-current-buffer (icalendar--get-unfolded-buffer buffer)
     (goto-char (point-min))
-    (let ((ical-list (icalendar--read-element nil nil)))
-      (list (cl-loop for elt in ical-list
-                     nconc (icalendar--get-children elt 'VEVENT))
-            (icalendar--convert-all-timezones ical-list)))))
-
-(defun cal-sync-convert-event (buffer)
-  (cl-destructuring-bind (events zone-map) (cal-sync-parse buffer)
-    (--keep
-     (unless (or (assq 'RRULE (caddr it)) (assq 'RECURRENCE-ID (caddr it)))
-       (cal-sync-enrich-properties (caddr it) zone-map))
-     events)))
+    (let* ((ical-list (icalendar--read-element nil nil))
+           (zone-map (icalendar--convert-all-timezones ical-list)))
+      (thread-last
+        (mapcan (lambda (e) (icalendar--get-children e 'VEVENT)) ical-list)
+        (--keep
+         (unless (or (assq 'RRULE (caddr it)) (assq 'RECURRENCE-ID (caddr it)))
+           (cal-sync-enrich-properties (caddr it) zone-map)))))))
 
 (defun cal-sync-get-property (event property) ;; like icalendar--get-event-property
   "Get the correct PROPERTY from EVENT.
@@ -92,12 +87,11 @@ SUMMARY is for warning message to recognize event."
         (message "Inconsistent endtime and duration for %s" summary))
       (setq dtend-dec dtend-dec-d))
     (cl-flet ((org-time (time)
-                        (when time
-                          (cl-destructuring-bind (sec min hour . rest) time
-                            (org-timestamp-translate
-                             (org-timestamp-from-time
-                              (encode-time time)
-                              (not (= 0 sec min hour))))))))
+                (cl-destructuring-bind (sec min hour . rest) time
+                  (org-timestamp-translate
+                   (org-timestamp-from-time
+                    (encode-time time)
+                    (not (= 0 sec min hour)))))))
       `((ORG-TIME nil ,(concat (org-time dtstart-dec)
                                (when dtend-dec
                                  (concat "--" (org-time dtend-dec)))))))))
@@ -129,9 +123,9 @@ SUMMARY is for warning message to recognize event."
 (defun cal-sync--org-entry (event)
   "Org block from given EVENT data."
   (cl-flet ((prop (symbol)
-                  (-some-> (cal-sync-get-properties event symbol)
-                    (org-string-nw-p)
-                    (string-trim))))
+              (-some-> (cal-sync-get-properties event symbol)
+                (org-string-nw-p)
+                (string-trim))))
     (with-temp-buffer
       (org-mode)
       (insert  "* " (cal-sync-get-property event 'HEADING) "\n")
@@ -234,7 +228,7 @@ OBJ contains all data to send to server."
                   (list action (org-entry-get nil "ITEM")))))
 
 (defun cal-sync-parse-file (ics-file)
-  (mapcar #'cal-sync--org-entry (cal-sync-convert-event (find-file-noselect ics-file))))
+  (mapcar #'cal-sync--org-entry (cal-sync-parse (find-file-noselect ics-file))))
 
 (defun cal-sync-import-file (ics-file)
   "Import an ICS-FILE into the main agenda file."
