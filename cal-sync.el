@@ -171,8 +171,16 @@ ignored.  INFO is a plist used as a communication channel.
 This cleans up the output of `org-icalendar-entry'."
   (cl-flet ((clean (pattern string) (replace-regexp-in-string pattern "" string nil nil 1)))
     (->> (org-icalendar-entry entry contents info)
-         (clean "^UID:\\s-*\\(\\(DL\\|SC\\|TS\\)[0-9]*-\\)")
-         (clean "^DESCRIPTION:.*?\\(\\s-*<[^>]+>\\(--<[^>]+>\\)?\\(\\\\n\\\\n\\)?\\)"))))
+         (clean (rx bol "UID:" (group (* space) (or "DL" "SC" "TS") (* digit) ?-)))
+         (clean (rx (group (optional ?,) "???"))) ;; categories clean
+         (clean
+          (let ((time-stamp-both
+                 (rx (or "[" "<") (+ (not (or "]" ">"))) (or "]" ">"))))
+            (concat "\\("
+                    (regexp-opt (list org-scheduled-string org-deadline-string
+                                      org-closed-string))
+                    "?[[:space:]]*" time-stamp-both
+                    "\\(?:--?-?" time-stamp-both "\\)?[ \\n]*\\)"))))))
 
 (org-export-define-derived-backend 'caldav 'org
   :translate-alist '((clock . ignore)

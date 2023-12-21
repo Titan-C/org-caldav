@@ -17,6 +17,14 @@
            (cal-sync-ical-times-span '((DTSTART (VALUE "DATE") "20221105T000000")
                                        (DTEND   (VALUE "DATE") "20221206T070000")) "test"))))
 
+(defun cal-clean-export ()
+  "Call on temp buffer"
+  (encode-coding-string
+   (->> (org-export-as 'caldav)
+        (replace-regexp-in-string "^DTSTAMP:.*?\n" "")
+        (replace-regexp-in-string "^X-WR-.*?\n" ""))
+   'utf-8))
+
 (ert-deftest test-ical-to-org ()
   (let ((org-tags-column 0)
         (org-export-with-author nil)
@@ -76,23 +84,22 @@ Search for big animals in the forest
 VERSION:2.0
 PRODID:-////Emacs with Org mode//EN
 CALSCALE:GREGORIAN
-BEGIN:VEVENT\r
-UID:first\r
-DTSTART;TZID=Europe/Berlin:20200319T103000\r
-DTEND;TZID=Europe/Berlin:20200319T113000\r
-SUMMARY:Feed the dragons\r
-LOCATION:forest\r
-DESCRIPTION:\\nTake some meat\\\r
- nSearch for big animals in the forest\r
-CATEGORIES:pets,dragons,hunting\r
+BEGIN:VEVENT
+UID:first
+DTSTART;TZID=Europe/Berlin:20200319T103000
+DTEND;TZID=Europe/Berlin:20200319T113000
+SUMMARY:Feed the dragons
+LOCATION:forest
+DESCRIPTION:Take some meat\\nSearch for big animals in the forest
+CATEGORIES:pets,dragons,hunting
 END:VEVENT
-BEGIN:VEVENT\r
-UID:922bd4ce-df85-4d69-a3f7-d56220c146a9\r
-DTSTART;TZID=Europe/Berlin:20200824T140000\r
-DTEND;TZID=Europe/Berlin:20200824T150000\r
-SUMMARY:Conversar\r
-DESCRIPTION:\r
-CATEGORIES:\r
+BEGIN:VEVENT
+UID:922bd4ce-df85-4d69-a3f7-d56220c146a9
+DTSTART;TZID=Europe/Berlin:20200824T140000
+DTEND;TZID=Europe/Berlin:20200824T150000
+SUMMARY:Conversar
+DESCRIPTION:
+CATEGORIES:
 END:VEVENT
 END:VCALENDAR
 "))
@@ -100,19 +107,51 @@ END:VCALENDAR
                    (with-temp-buffer
                      (insert input)
                      (mapconcat 'cal-sync--org-entry
-                                (cal-sync-convert-event (current-buffer))
+                                (cal-sync-parse (current-buffer))
                                 ""))))
     (should (equal exported-ics
                    (with-temp-buffer
                      (insert result)
-                     (encode-coding-string
-                      (->> (org-export-as 'caldav)
-                           (replace-regexp-in-string "^DTSTAMP:.*?\n" "")
-                           (replace-regexp-in-string "^X-WR-.*?\n" ""))
-                      'utf-8))))))
+                     (cal-clean-export))))))
 
 (ert-deftest test-cal-sync-error-handler ()
   (with-temp-buffer
     (insert "HTTP/1.0 200 OK")
     (should (equal nil (cal-sync-error-handling nil (current-buffer))))
     (should (equal t (cal-sync-error-handling '(:error (error http 404)) (current-buffer))))))
+
+(ert-deftest test-export ()
+  (should
+   (equal
+    (with-temp-buffer
+      (insert "* TODO helo :hte:msa:ist:
+:PROPERTIES:
+:LOCATION: Creative
+:ID: 0dc-pu
+:END:
+
+ups
+
+<2023-12-21>
+
+gou
+los
+pus")
+      (let ((org-export-with-author nil))
+        (cal-clean-export)))
+    (encode-coding-string
+     "BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-////Emacs with Org mode//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:0dc-pu
+DTSTART;VALUE=DATE:20231221
+DTEND;VALUE=DATE:20231222
+SUMMARY:helo
+LOCATION:Creative
+DESCRIPTION:ups\\n\\ngou\\nlos\\npus
+CATEGORIES:hte,msa,ist
+END:VEVENT
+END:VCALENDAR
+" 'utf-8))))
