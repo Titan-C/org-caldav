@@ -174,13 +174,11 @@ This cleans up the output of `org-icalendar-entry'."
          (clean (rx bol "UID:" (group (* space) (or "DL" "SC" "TS") (* digit) ?-)))
          (clean (rx (group (optional ?,) "???"))) ;; categories clean
          (clean
-          (let ((time-stamp-both
-                 (rx (or "[" "<") (+ (not (or "]" ">"))) (or "]" ">"))))
-            (concat "\\("
-                    (regexp-opt (list org-scheduled-string org-deadline-string
-                                      org-closed-string))
-                    "?[[:space:]]*" time-stamp-both
-                    "\\(?:--?-?" time-stamp-both "\\)?[ \\n]*\\)"))))))
+          (concat "\\("
+                  (regexp-opt (list org-scheduled-string org-deadline-string
+                                    org-closed-string))
+                  "?[[:space:]]*" org-ts-regexp-both
+                  "\\(--?-?" org-ts-regexp-both "\\)?\\)")))))
 
 (org-export-define-derived-backend 'caldav 'org
   :translate-alist '((clock . ignore)
@@ -190,7 +188,7 @@ This cleans up the output of `org-icalendar-entry'."
 		     (inlinetask . ignore)
 		     (planning . ignore)
 		     (section . ignore)
-		     ;;(inner-template . (lambda (c i) c))
+		     (inner-template . org-icalendar-inner-template)
 		     (template . org-icalendar-template))
   :options-alist
   '((:exclude-tags

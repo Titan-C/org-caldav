@@ -133,8 +133,8 @@ END:VCALENDAR
 ups
 
 <2023-12-21>
-
 gou
+[[link][empty]]
 los
 pus")
       (let ((org-export-with-author nil))
@@ -150,7 +150,7 @@ DTSTART;VALUE=DATE:20231221
 DTEND;VALUE=DATE:20231222
 SUMMARY:helo
 LOCATION:Creative
-DESCRIPTION:ups\\n\\ngou\\nlos\\npus
+DESCRIPTION:ups\\n\\n\\ngou\\n[[link][empty]]\\nlos\\npus
 CATEGORIES:hte,msa,ist
 END:VEVENT
 END:VCALENDAR
