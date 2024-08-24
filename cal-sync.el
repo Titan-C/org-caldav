@@ -2,7 +2,7 @@
 ;;
 ;; Version: 0.0.1
 ;; Homepage: https://github.com/titan-c/org-caldav
-;; Package-Requires: ((emacs "27.1"))
+;; Package-Requires: ((emacs "28.1"))
 ;;
 ;;; Commentary:
 ;;
@@ -23,22 +23,37 @@
   "Web Calendar configuration."
   :group 'external)
 
-(defcustom cal-sync-url ""
-  "Caldav server url.
-For a nextcloud server it looks like this:
-https://nextcloud-server-url/remote.php/dav/calendars/USERID"
-  :type 'string)
+(cl-defstruct (cal-sync-calendar (:constructor cal-sync-calendar--create))
+  "A calendar definition."
+  url host user file)
 
-(defcustom cal-sync-calendar-id ""
-  "Calendar id."
-  :type 'string)
+(defun cal-sync-calendar-create (url user file)
+  "Create caldav calendar connection.
+URL is the caldav endpoint for the calendar.
+  For a nextcloud server it looks like this:
+  https://nextcloud-server-url/remote.php/dav/calendars/USERID
+USER is to search in authinfo for login data.
+FILE is where to calendar is locally stored."
+  (unless (file-exists-p file) (user-error "File `%s' does not exist" file))
+  (let ((host (url-host (url-generic-parse-url url))))
+    (cal-sync-calendar--create :url (file-name-as-directory url)
+                               :host host :user user :file file)))
 
-(defcustom cal-sync-calendar-file "~/org/caldav.org"
-  "Org file with agenda."
-  :type 'string)
+(defun cal-sync--auth-header (calendar)
+  "Generate the Basic authentication header for CALENDAR."
+  (when-let ((auth (auth-source-search
+                    :host (cal-sync-calendar-host calendar)
+                    :user (cal-sync-calendar-user calendar))))
+    (-let (((&plist :user :secret) (car auth)))
+      (base64-encode-string (format "Basic %s:%s" user (funcall secret)) t))))
+
+(defcustom cal-sync-connection nil
+  "Connection to Caldav calendar.
+Create with function `cal-sync-calendar-create'."
+  :type 'cal-sync-calendar)
 
 (defun cal-sync-parse (buffer)
-  "Parse icalendar BUFFER. Returns a list of all events."
+  "Parse icalendar BUFFER. Return a list of all events."
   (with-current-buffer (icalendar--get-unfolded-buffer buffer)
     (goto-char (point-min))
     (let* ((ical-list (icalendar--read-element nil nil))
@@ -152,14 +167,6 @@ SUMMARY is for warning message to recognize event."
 
       (buffer-substring-no-properties (point-min) (point-max)))))
 
-(defun cal-sync-events-url (server-url calendar-id)
-  "Compose the events URL out of SERVER-URL and the CALENDAR-ID."
-  (let ((url (file-name-as-directory server-url)))
-    (file-name-as-directory
-     (if (string-match ".*%s.*" url)
-         (format url calendar-id)
-       (concat url calendar-id)))))
-
 ;;; export
 
 (defun cal-sync-entry (entry contents info)
@@ -225,8 +232,10 @@ BUFFER is the request buffer."
 OBJ contains all data to send to server."
   (let ((url-request-method action)
         (url-request-data obj)
-        (url-request-extra-headers '(("Content-type" . "text/calendar; charset=UTF-8")))
-        (url (concat (cal-sync-events-url cal-sync-url cal-sync-calendar-id)
+        (url-request-extra-headers
+         `(("Content-type" . "text/calendar; charset=UTF-8")
+           ("Authorization" . ,(cal-sync--auth-header cal-sync-connection))))
+        (url (concat (cal-sync-calendar-url cal-sync-connection)
                      (org-id-get-create) ".ics")))
     (url-retrieve url (lambda (status action title)
                         (unless (cal-sync-error-handling status (current-buffer))
@@ -234,13 +243,14 @@ OBJ contains all data to send to server."
                   (list action (org-entry-get nil "ITEM")))))
 
 (defun cal-sync-parse-file (ics-file)
+  "Parse ICS-FILE into `org-mode' entries."
   (mapcar #'cal-sync--org-entry (cal-sync-parse (find-file-noselect ics-file))))
 
 (defun cal-sync-import-file (ics-file)
   "Import an ICS-FILE into the main agenda file."
   (interactive (list (read-file-name "Calendar ics file: ")))
   (dolist (event (cal-sync-parse-file ics-file))
-    (write-region event nil cal-sync-calendar-file t)))
+    (write-region event nil (cal-sync-calendar-file cal-sync-connection) t)))
 
 (defun cal-sync-delete ()
   "Delete current org node on the server."
