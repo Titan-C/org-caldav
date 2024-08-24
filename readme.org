@@ -6,16 +6,16 @@ This package is my personal take on synchronizing to one online calendar via
 caldav. I was heavily inspired by [[https://github.com/dengste/org-caldav][org-caldav]], which wasn't working the way I
 wanted, and after some patches I wrote my own version.
 
-This project is a minimal take, it is a step back from org-caldav feature set,
+This project is a minimal take, it is a step back from =org-caldav= feature set,
 yet it solves what annoyed me in a simple way.
 
 ** What is different?
 - I don't care about backwards compatibility. I run Arch Linux and only
-  care about supporting my latest version. Same for org-mode.
-- There is *no sync*. I don't keep a database (a file with the current state
-  of the calendar events). I download all the events and convert them to
-  org-mode, then I just push my edits to the caldav server. I track my
-  org-files with git.
+  care about supporting my latest version. Same for =org-mode=.
+- There is *no sync*. I don't keep a database (a file with the current state of
+  the calendar events). I download all the events and convert them to =org-mode=
+  using another script. I individually push my edits to the caldav server. I
+  track my org-files with git.
 - Pushes to the server run asynchronously.
 - There are no checks about events having changed on the server, this
   exporter just pushes and overwrites. There is no backup.
@@ -48,33 +48,18 @@ importer has no idea about concepts like attendees, organizers, reminders
 and it intentionally ignores recurring events.
 
 ** Setup
-- Create a new calendar in your server, the name does not matter
-- Set =cal-sync-url= to the base address of your CalDAV server e.g.:
+- Create a new calendar in your server, the name does not matter.
+- Set =cal-sync-connection= using the function =cal-sync-calendar-create=
+  to configure the calendar connection to your CalDAV server e.g.:
 #+begin_src emacs-lisp
-(setq cal-sync-url "https://nextcloud-server-url/remote.php/dav/calendars/USERID")
+(setq cal-sync-connection
+      (cal-sync-calendar-create
+       "https://nextcloud-server-url/remote.php/dav/calendars/USERID/CALENDARID/"
+       "USERID" "~/path-org-calendar.org"))
 #+end_src
-- Set =cal-sync-calendar-id= to the new calendar you just created.
-#+begin_src emacs-lisp
-(setq cal-sync-calendar-id "mycalendar")
-#+end_src
-*** Storing authentication information in authinfo/netrc
-If you don't want to enter your user/password every time, you can
-store it permanently in an authinfo file. In Emacs, the auth-source
-package takes care of that, but the syntax for https authentication is
-a bit peculiar. You have to use a line like the following
 
-#+begin_example
-machine server-fqdn:443 port https login username password secret
-#+end_example
-
-Note that you have to specify the port number in the URL and *also*
-specify 'https' for the port. This is not a bug. For more information,
-see (info "auth"), especially section "Help for users".
-
-Since you are storing your password in a file you should encrypt it
-using GnuPG. Emacs will prompt you for a decryption key when it tries
-to read the file.
-
+Authentication credentials shall be managed by =auth-source=. Thus use
+your personal =authinfo= file, or =pass= to store that info.
 
 *** Starting from scratch based on a existing calendar
 The next code example shows how you can import your entire calendar into
@@ -86,14 +71,14 @@ entries). You'll need to clean this file up. I'll store it on
 (defun cal-sync-new-calendar (status targe-file)
   (unless (cal-sync-error-handling status (current-buffer))
     (let ((org-string (mapconcat 'cal-sync--org-entry
-                                 (cal-sync-convert-event (current-buffer))
+                                 (cal-sync-parse (current-buffer))
                                  "\n")))
       (with-current-buffer (find-file-noselect targe-file)
         (erase-buffer)
         (org-mode)
         (insert org-string)))))
 
-(url-retrieve "https://nextcloud-server-url/remote.php/dav/calendars/USERID/CALENDAR-ID/?export"
+(url-retrieve "https://nextcloud-server-url/remote.php/dav/calendars/USERID/CALENDARID/?export"
               'cal-sync-new-calendar
               '("/tmp/calendar.org"))
 #+end_src
