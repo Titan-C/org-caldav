@@ -45,7 +45,10 @@ FILE is where to calendar is locally stored."
                     :host (cal-sync-calendar-host calendar)
                     :user (cal-sync-calendar-user calendar))))
     (-let (((&plist :user :secret) (car auth)))
-      (base64-encode-string (format "Basic %s:%s" user (funcall secret)) t))))
+      (thread-last
+        (format "%s:%s" user (funcall secret))
+        (base64-encode-string)
+        (concat "Basic ")))))
 
 (defcustom cal-sync-connection nil
   "Connection to Caldav calendar.
