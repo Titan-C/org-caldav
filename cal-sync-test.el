@@ -46,7 +46,7 @@ END:STANDARD
 END:VTIMEZONE
 BEGIN:VEVENT
 UID:first
-SUMMARY:Feed the dragons
+SUMMARY:DL: Feed the dragons
 LOCATION:forest
 DTSTART;TZID=\"Europe/Berlin\":20200319T103000
 DTEND;TZID=\"Europe/Berlin\":20200319T113000
@@ -68,11 +68,11 @@ SUMMARY:Conversar
 END:VEVENT
 END:VCALENDAR")
         (result "* Feed the dragons :pets:dragons:hunting:
+DEADLINE: <2020-03-19 Thu 10:30>--<2020-03-19 Thu 11:30>
 :PROPERTIES:
 :ID:       first
 :LOCATION: forest
 :END:
-<2020-03-19 Thu 10:30>--<2020-03-19 Thu 11:30>
 Take some meat
 Search for big animals in the forest
 * Conversar
@@ -88,7 +88,7 @@ BEGIN:VEVENT
 UID:first
 DTSTART;TZID=Europe/Berlin:20200319T103000
 DTEND;TZID=Europe/Berlin:20200319T113000
-SUMMARY:Feed the dragons
+SUMMARY:DL: Feed the dragons
 LOCATION:forest
 DESCRIPTION:Take some meat\\nSearch for big animals in the forest
 CATEGORIES:pets,dragons,hunting
@@ -150,7 +150,7 @@ DTSTART;VALUE=DATE:20231221
 DTEND;VALUE=DATE:20231222
 SUMMARY:helo
 LOCATION:Creative
-DESCRIPTION:ups\\n\\n\\ngou\\n[[link][empty]]\\nlos\\npus
+DESCRIPTION:ups\\n\\ngou\\n[[link][empty]]\\nlos\\npus
 CATEGORIES:hte,msa,ist
 END:VEVENT
 END:VCALENDAR

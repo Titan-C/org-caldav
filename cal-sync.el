@@ -118,9 +118,14 @@ SUMMARY is for warning message to recognize event."
   "Add additional properties to EVENT-PROPERTIES considering ZONE-MAP."
   (let ((summary (icalendar--convert-string-for-import
                   (or (cal-sync-get-property event-properties 'SUMMARY)
-                      "No Title"))))
+                      "No Title")))
+        (e-type-rx
+         (rx bol
+             (group (or (literal org-icalendar-deadline-summary-prefix)
+                        (literal org-icalendar-scheduled-summary-prefix)))
+             (group (+ any)) eol)))
     (append
-     (if (string-match "^\\(?:\\(DL\\|S\\):\\s+\\)?\\(.*\\)$" summary)
+     (if (string-match e-type-rx summary)
          `((HEADING nil ,(match-string 2 summary))
            (E-TYPE nil ,(match-string 1 summary)))
        `((HEADING nil ,summary)
@@ -131,11 +136,10 @@ SUMMARY is for warning message to recognize event."
 (defun cal-sync--org-time-range (event-properties)
   "Construct `org-mode' timestamp range out of the EVENT-PROPERTIES."
   (concat
-   (let ((e-type (cal-sync-get-property event-properties 'E-TYPE)))
-     (cond
-      ((string= "S" e-type) "SCHEDULED: ")
-      ((string= "DL" e-type) "DEADLINE: ")
-      (t "")))
+   (pcase (cal-sync-get-property event-properties 'E-TYPE)
+     ((pred (string-equal org-icalendar-deadline-summary-prefix)) "DEADLINE: ")
+     ((pred (string-equal org-icalendar-scheduled-summary-prefix)) "SCHEDULED: ")
+     (_ ""))
    (cal-sync-get-property event-properties 'ORG-TIME)))
 
 (defun cal-sync--org-entry (event)
@@ -183,23 +187,18 @@ This cleans up the output of `org-icalendar-entry'."
     (->> (org-icalendar-entry entry contents info)
          (clean (rx bol "UID:" (group (* space) (or "DL" "SC" "TS") (* digit) ?-)))
          (clean (rx (group (optional ?,) "???"))) ;; categories clean
-         (clean
-          (concat "\\("
-                  (regexp-opt (list org-scheduled-string org-deadline-string
-                                    org-closed-string))
-                  "?[[:space:]]*" org-ts-regexp-both
-                  "\\(--?-?" org-ts-regexp-both "\\)?\\)")))))
+         (clean (rx (group (regex org-ts-regexp-both) (? (+ ?-) (regex org-ts-regexp-both)) (* "\\n")))))))
 
 (org-export-define-derived-backend 'caldav 'org
   :translate-alist '((clock . ignore)
-		     (footnote-definition . ignore)
-		     (footnote-reference . ignore)
-		     (headline . cal-sync-entry)
-		     (inlinetask . ignore)
-		     (planning . ignore)
-		     (section . ignore)
-		     (inner-template . org-icalendar-inner-template)
-		     (template . org-icalendar-template))
+                     (footnote-definition . ignore)
+                     (footnote-reference . ignore)
+                     (headline . cal-sync-entry)
+                     (inlinetask . ignore)
+                     (planning . ignore)
+                     (section . ignore)
+                     (inner-template . org-icalendar-inner-template)
+                     (template . org-icalendar-template))
   :options-alist
   '((:exclude-tags
      "ICALENDAR_EXCLUDE_TAGS" nil org-icalendar-exclude-tags split)
@@ -215,7 +214,9 @@ This cleans up the output of `org-icalendar-entry'."
     (:icalendar-store-UID nil nil org-icalendar-store-UID)
     (:icalendar-timezone nil nil org-icalendar-timezone)
     (:icalendar-use-deadline nil nil org-icalendar-use-deadline)
-    (:icalendar-use-scheduled nil nil org-icalendar-use-scheduled))
+    (:icalendar-use-scheduled nil nil org-icalendar-use-scheduled)
+    (:icalendar-scheduled-summary-prefix nil nil org-icalendar-scheduled-summary-prefix)
+    (:icalendar-deadline-summary-prefix nil nil org-icalendar-deadline-summary-prefix))
   :filters-alist
   '((:filter-headline . org-icalendar-clear-blank-lines)))
 
@@ -260,23 +261,24 @@ OBJ contains all data to send to server."
   (interactive)
   (cal-sync-org-entry-action "DELETE"))
 
+(defun cal-sync-export-entry ()
+  "Export current(on point) org node to ics buffer."
+  (let ((content (buffer-substring-no-properties
+                  (org-entry-beginning-position)
+                  (org-entry-end-position))))
+    (with-temp-buffer
+      (insert content)
+      (encode-coding-string
+       (org-export-as 'caldav) 'utf-8))))
+
 (defun cal-sync-push ()
   "Push current org node to the server."
   (interactive)
   ;; Need id before processing, otherwise when pushing content server will create a new one
   ;; and there will be a conflict of file UID and event UID, that shows up after download.
   (org-id-get-create)
-  (if-let ((not-rrule (not (string-match-p "rrule" (or (org-entry-get nil "TAGS") ""))))
-           (content (buffer-substring-no-properties
-                     (org-entry-beginning-position)
-                     (org-entry-end-position)))
-           (org-icalendar-categories '(local-tags)))
-      (cal-sync-org-entry-action
-       "PUT"
-       (with-temp-buffer
-         (insert content)
-         (encode-coding-string
-          (org-export-as 'caldav) 'utf-8)))))
+  (unless (string-match-p "rrule" (or (org-entry-get nil "TAGS") ""))
+    (cal-sync-org-entry-action "PUT" (cal-sync-export-entry))))
 
 (provide 'cal-sync)
 ;;; cal-sync.el ends here
