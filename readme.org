@@ -60,7 +60,15 @@ and it intentionally ignores recurring events.
 
 Authentication credentials shall be managed by =auth-source=. Thus use
 your personal =authinfo= file, or =pass= to store that info.
-
+*** Dealing with deadlines and scheduled
+This is more a strategy please read what the following variables mean, try out
+and choose what works best for you. I settled on this configuration.
+#+begin_src emacs-lisp
+(setq org-icalendar-deadline-summary-prefix "DL:TODO ")
+(setq org-icalendar-scheduled-summary-prefix "S:TODO ")
+(setq org-icalendar-use-scheduled '(event-if-not-todo event-if-todo todo-start))
+(setq org-icalendar-use-deadline  '(event-if-not-todo event-if-todo todo-due))
+#+end_src
 *** Starting from scratch based on a existing calendar
 The next code example shows how you can import your entire calendar into
 one org file. It is a simple import it does not consider changing in anyway
