@@ -70,13 +70,8 @@ entries). You'll need to clean this file up. I'll store it on
 #+begin_src emacs-lisp
 (defun cal-sync-new-calendar (status targe-file)
   (unless (cal-sync-error-handling status (current-buffer))
-    (let ((org-string (mapconcat 'cal-sync--org-entry
-                                 (cal-sync-parse (current-buffer))
-                                 "\n")))
-      (with-current-buffer (find-file-noselect targe-file)
-        (erase-buffer)
-        (org-mode)
-        (insert org-string)))))
+    (dolist (event (cal-sync-parse (current-buffer)))
+      (write-region event nil target-file t))))
 
 (url-retrieve "https://nextcloud-server-url/remote.php/dav/calendars/USERID/CALENDARID/?export"
               'cal-sync-new-calendar

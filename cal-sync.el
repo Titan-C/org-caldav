@@ -65,7 +65,8 @@ Create with function `cal-sync-calendar-create'."
         (mapcan (lambda (e) (icalendar--get-children e 'VEVENT)) ical-list)
         (--keep
          (unless (or (assq 'RRULE (caddr it)) (assq 'RECURRENCE-ID (caddr it)))
-           (cal-sync-enrich-properties (caddr it) zone-map)))))))
+           (cal-sync-enrich-properties (caddr it) zone-map)))
+        (mapcar #'cal-sync--org-entry)))))
 
 (defun cal-sync-get-property (event property) ;; like icalendar--get-event-property
   "Get the correct PROPERTY from EVENT.
@@ -246,14 +247,10 @@ OBJ contains all data to send to server."
                           (message "%s: \"%s\" successful" action title)))
                   (list action (org-entry-get nil "ITEM")))))
 
-(defun cal-sync-parse-file (ics-file)
-  "Parse ICS-FILE into `org-mode' entries."
-  (mapcar #'cal-sync--org-entry (cal-sync-parse (find-file-noselect ics-file))))
-
 (defun cal-sync-import-file (ics-file)
   "Import an ICS-FILE into the main agenda file."
   (interactive (list (read-file-name "Calendar ics file: ")))
-  (dolist (event (cal-sync-parse-file ics-file))
+  (dolist (event (cal-sync-parse (find-file-noselect ics-file)))
     (write-region event nil (cal-sync-calendar-file cal-sync-connection) t)))
 
 (defun cal-sync-delete ()
